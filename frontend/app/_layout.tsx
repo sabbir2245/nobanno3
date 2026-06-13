@@ -43,7 +43,7 @@ export default function RootLayout() {
           <Stack.Screen name="role" />
           <Stack.Screen name="auth/login" />
           <Stack.Screen name="auth/register" />
-          <Stack.Screen name="auth/forgot-password" />
+          <Stack.Screen name="auth/forgot" />
           <Stack.Screen name="(customer)" />
           <Stack.Screen name="(farmer)" />
           <Stack.Screen name="product/[id]" options={{ presentation: 'card' }} />

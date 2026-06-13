@@ -1,5 +1,4 @@
 import { StyleSheet } from "react-native";
-import { Header } from "react-native/Libraries/NewAppScreen";
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 
 
@@ -134,3 +133,39 @@ export const globalstyles = StyleSheet.create( {
 
     }
 )
+
+export const authStyles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: Colors.paleGreen },
+  container: {
+    flexGrow: 1,
+    padding: Spacing.lg,
+    paddingTop: 50,
+  },
+  brand: {
+    fontFamily: Fonts.bold,
+    fontSize: 28,
+    color: Colors.darkGreen,
+  },
+  title: {
+    fontFamily: Fonts.bold,
+    fontSize: 24,
+    color: Colors.textDark,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xl,
+  },
+  footerText: {
+    fontFamily: Fonts.regular,
+    fontSize: 14,
+    color: Colors.textMuted,
+  },
+  link: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 14,
+    color: Colors.darkGreen,
+    textDecorationLine: 'underline',
+  },
+})

@@ -1,8 +1,11 @@
 import math
+import random
 from decimal import Decimal
 from django.db import transaction
 from django.db.models import Sum, Q
 from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
+from django.conf import settings
 from rest_framework import viewsets, permissions, status, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,10 +13,12 @@ from rest_framework.decorators import action
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 
-from .models import Post, Order, Review
+from .models import Post, Order, Review, OTP
 from .serializers import (
-    UserSerializer, RegisterSerializer, PostSerializer, 
-    OrderSerializer, ReviewSerializer
+    UserSerializer, RegisterSerializer, PostSerializer,
+    OrderSerializer, ReviewSerializer , EmailOrPhoneAuthSerializer
+    
+    
 )
 from .permissions import IsFarmer, IsCustomer, IsAdminUser, IsOwnerOrReadOnly
 
@@ -30,16 +35,24 @@ def calculate_haversine(lat1, lon1, lat2, lon2):
     return round(R * c, 2)
 
 
+
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
+        # 1. Standard DRF instantiation and validation
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
+        # 2. Triggers our transaction-safe user generation logic
         user = serializer.save()
+        
+        # 3. Automatically issue an Auth Token upon signup
         token, created = Token.objects.get_or_create(user=user)
+        
+        # 4. Return custom registration structural layout
         return Response({
             "token": token.key,
             "user": UserSerializer(user).data
@@ -48,17 +61,24 @@ class RegisterView(generics.CreateAPIView):
 
 class CustomLoginView(ObtainAuthToken):
     permission_classes = [permissions.AllowAny]
+    serializer_class = EmailOrPhoneAuthSerializer
 
     def post(self, request, *args, **kwargs):
+        # 1. Pass request to EmailOrPhoneAuthSerializer to route authentication
         serializer = self.serializer_class(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
+        
+        # 2. Extract validated user instance 
         user = serializer.validated_data['user']
+        
+        # 3. Fetch existing token or create a new one
         token, created = Token.objects.get_or_create(user=user)
+        
+        # 4. Respond with both access token and comprehensive profile context
         return Response({
             "token": token.key,
             "user": UserSerializer(user).data
-        })
-
+        }, status=status.HTTP_200_OK)
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = UserSerializer
@@ -431,3 +451,4 @@ class AdminAnalyticsView(APIView):
             },
             "hotspots": hotspots
         })
+

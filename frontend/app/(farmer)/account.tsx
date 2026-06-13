@@ -53,9 +53,10 @@ export default function FarmerAccountScreen() {
 
   return (
     <View style={styles.container}>
-      <ScreenHeader title={t("My Account")} subtitle={t("Nobanno Farmer Hub")} />
+      <ScreenHeader title={t("আমার অ্যাকাউন্ট")} subtitle={t("নবান্ন ফার্মার হাব")} />
       <ScrollView
         contentContainerStyle={styles.content}
+        
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -68,16 +69,16 @@ export default function FarmerAccountScreen() {
           </View>
           <View>
             <Text style={styles.name}>{user?.name || user?.username}</Text>
-            <Text style={styles.detail}>{user?.phone_number || 'No phone'}</Text>
-            <Text style={styles.detail}>{user?.address || 'No address'}</Text>
+            <Text style={styles.detail}>{user?.phone_number || 'কোনো ফোন নম্বর নেই'}</Text>
+            <Text style={styles.detail}>{user?.address || 'কোনো ঠিকানা নেই'}</Text>
             {user?.avg_rating != null && (
-              <Text style={styles.rating}>★ {user.avg_rating} avg rating</Text>
+              <Text style={styles.rating}>★ {user.avg_rating} গড় রেটিং</Text>
             )}
           </View>
         </View>
 
         <View style={styles.walletCard}>
-          <Text style={styles.walletLabel}>Wallet Balance</Text>
+          <Text style={styles.walletLabel}>ওয়ালেট ব্যালেন্স</Text>
           <Text style={styles.walletValue}>
             ৳ {parseFloat(wallet.balance).toFixed(2)}
           </Text>
@@ -85,19 +86,19 @@ export default function FarmerAccountScreen() {
 
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Pending Payouts</Text>
+            <Text style={styles.statLabel}>বাকি পাওনা (পেন্ডিং)</Text>
             <Text style={styles.statValue}>
               ৳ {parseFloat(wallet.pending_payouts).toFixed(0)}
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Total Earnings</Text>
+            <Text style={styles.statLabel}>মোট উপার্জন</Text>
             <Text style={styles.statValue}>
               ৳ {parseFloat(wallet.total_earnings).toFixed(0)}
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statLabel}>Commission Paid</Text>
+            <Text style={styles.statLabel}>কমিশন দেওয়া হয়েছে</Text>
             <Text style={styles.statValue}>
               ৳ {parseFloat(wallet.total_commission_deductions).toFixed(0)}
             </Text>
@@ -105,7 +106,7 @@ export default function FarmerAccountScreen() {
         </View>
 
         <PrimaryButton
-          title={t("Logout")}
+          title={t("লগআউট")}
           onPress={handleLogout}
           variant="secondary"
           style={{ marginTop: Spacing.xl }}

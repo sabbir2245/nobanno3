@@ -7,6 +7,7 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,7 +20,7 @@ SECRET_KEY = 'django-insecure-r=e*)_!hg93m=x89d_=(k9*9c)uhy&5rxodfrm^#e^!c41_xj*
 DEBUG = True
 
 # Ensure your PC's local network IP matches this when testing with a real phone
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.100']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.100', '10.174.158.253']
 
 
 # Application definition
@@ -71,14 +72,16 @@ WSGI_APPLICATION = 'nobanno.wsgi.application'
 
 # Database Configuration
 # Seamlessly transitions to PostgreSQL, falling back to local defaults if .env is missing
+import sys
+TESTING = 'test' in sys.argv or 'test_password_reset_flow' in sys.argv[0]
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ['DB_NAME'],          # No default fallback! Throws an error if missing.
-        'USER': os.environ['DB_USER'],          
-        'PASSWORD': os.environ['DB_PASSWORD'],  
-        'HOST': os.environ.get('DB_HOST', 'localhost'), # Safe to fallback to localhost
-        'PORT': os.environ.get('DB_PORT', '5432'),      # Safe to fallback to 5432
+        'ENGINE': 'django.db.backends.sqlite3' if TESTING else 'django.db.backends.postgresql',
+        'NAME': ':memory:' if TESTING else os.environ['DB_NAME'],
+        'USER': os.environ.get('DB_USER', '') if not TESTING else '',
+        'PASSWORD': os.environ.get('DB_PASSWORD', '') if not TESTING else '',
+        'HOST': os.environ.get('DB_HOST', 'localhost') if not TESTING else '',
+        'PORT': os.environ.get('DB_PORT', '5432') if not TESTING else '',
     }
 }
 
@@ -108,6 +111,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Custom User Model configuration
 AUTH_USER_MODEL = 'api.User'
 
+AUTHENTICATION_BACKENDS = [
+    'api.backends.EmailOrPhoneBackend',          # Points to the app named 'api'
+    'django.contrib.auth.backends.ModelBackend',  # Keeps default username login active as backup
+]
+
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -125,3 +133,15 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Media configuration (safely defined after BASE_DIR using modern Pathlib)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'timage'
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+
+# Your login email for Brevo
+# Safely loading variables from your local environment setup
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', '')
+EMAIL_FAIL_SILENTLY = False

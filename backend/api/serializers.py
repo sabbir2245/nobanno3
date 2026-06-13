@@ -2,14 +2,21 @@ from decimal import Decimal
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from .models import Post, Order, Review
-
+from .models import Post, Order, Review, OTP
+from rest_framework.validators import UniqueValidator
 
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     avg_rating = serializers.ReadOnlyField()
     total_sales = serializers.ReadOnlyField()
+    
+    email = serializers.EmailField(
+        validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this email already exists.")]
+    )
+    phone_number = serializers.CharField(
+        validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this phone number already exists.")]
+    )
 
     class Meta:
         model = User
@@ -21,9 +28,42 @@ class UserSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ('balance', 'is_verified', 'avg_rating', 'total_sales')
 
+# In your serializers.py
+class EmailOrPhoneAuthSerializer(serializers.Serializer):
+    email_or_phone = serializers.CharField()
+    password = serializers.CharField(write_only=True)
 
+    def validate(self, attrs):
+        identifier = attrs.get('email_or_phone')
+        password = attrs.get('password')
+
+        if identifier and password:
+            # We pass 'identifier' to Django's username parameter. 
+            # Our custom EmailOrPhoneBackend will intercept it.
+            from django.contrib.auth import authenticate
+            user = authenticate(request=self.context.get('request'),
+                                username=identifier, password=password)
+
+            if not user:
+                raise serializers.ValidationError('Unable to log in with provided credentials.')
+        else:
+            raise serializers.ValidationError('Must include "email_or_phone" and "password".')
+
+        attrs['user'] = user
+        return attrs
+    
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    
+    # CRITICAL: Enforce uniqueness during registration so the API handles duplicates gracefully (400 Bad Request)
+    email = serializers.EmailField(
+        required=True, # Make it required if it's a primary login option
+        validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this email already exists.")]
+    )
+    phone_number = serializers.CharField(
+        required=True, # Make it required if it's a primary login option
+        validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this phone number already exists.")]
+    )
 
     class Meta:
         model = User
@@ -38,16 +78,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        # Extract the password separately because create_user handles hashing automatically
+        password = validated_data.pop('password')
+        
+        # Cleaner approach: Pass the remaining dictionary data directly into create_user
         user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data.get('email', ''),
-            password=validated_data['password'],
-            role=validated_data.get('role', 'customer'),
-            name=validated_data.get('name', ''),
-            phone_number=validated_data.get('phone_number', ''),
-            address=validated_data.get('address', ''),
-            latitude=validated_data.get('latitude'),
-            longitude=validated_data.get('longitude'),
+            password=password,
+            **validated_data
         )
         return user
 
@@ -201,3 +238,4 @@ class ReviewSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+

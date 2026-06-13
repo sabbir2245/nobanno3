@@ -132,10 +132,10 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
-  login: (username: string, password: string) =>
+  login: (email_or_phone: string, password: string) =>
     request<{ token: string; user: User }>('/auth/login/', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ email_or_phone, password }),
     }),
 
   getProfile: (token: string) =>
@@ -279,6 +279,18 @@ export const api = {
       total_commission_deductions: string;
       recent_transactions: Order[];
     }>('/farmer/wallet/', { method: 'GET' }, token),
+
+  forgotPassword: (email: string, method: 'email' | 'sms' = 'email') =>
+    request<{ message: string }>('/auth/forgot-password/', {
+      method: 'POST',
+      body: JSON.stringify({ email, method }),
+    }),
+
+  resetPassword: (email: string, otp: string, new_password: string) =>
+    request<{ message: string }>('/auth/reset-password/', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, new_password }),
+    }),
 };
 
 export { ApiError };

@@ -21,16 +21,16 @@ interface AuthContextValue {
   role: UserRole | null;
   location: LocationData | null;
   isLoading: boolean;
-  setRole: (role: UserRole) => Promise<void>;
   setLocation: (loc: LocationData) => Promise<void>;
-  login: (username: string, password: string) => Promise<User>;
+  // CHANGE 1: Updated parameter name to accurately represent what it accepts
+  login: (emailOrPhone: string, password: string) => Promise<User>;
   register: (data: {
     username: string;
-    email: string;
+    email: string;        // CHANGE 2: Marked as strictly required
+    phone_number: string; // CHANGE 3: Marked as strictly required
     password: string;
-    role: UserRole; // Passed explicitly from registration screen form
+    role: UserRole;
     name?: string;
-    phone_number?: string;
     address?: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
@@ -76,11 +76,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const setRole = useCallback(async (nextRole: UserRole) => {
-    setRoleState(nextRole);
-    await AsyncStorage.setItem(KEYS.role, nextRole);
-  }, []);
-
   const setLocation = useCallback(async (loc: LocationData) => {
     setLocationState(loc);
     await AsyncStorage.setItem(KEYS.location, JSON.stringify(loc));
@@ -89,37 +84,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistSession = useCallback(async (nextToken: string, nextUser: User) => {
     setToken(nextToken);
     setUser(nextUser);
-    setRoleState(nextUser.role); // Automatically sync context role state from user object
+    setRoleState(nextUser.role);
     await AsyncStorage.multiSet([
       [KEYS.token, nextToken],
       [KEYS.user, JSON.stringify(nextUser)],
-      [KEYS.role, nextUser.role], // Keeps local device storage synced
+      [KEYS.role, nextUser.role],
     ]);
   }, []);
 
-  // Login: Automatically resolves role via user properties returned by API
+  // Login: Pass emailOrPhone directly downstream
   const login = useCallback(
-    async (username: string, password: string) => {
-      const result = await api.login(username, password);
+    async (emailOrPhone: string, password: string) => {
+      // CHANGE 4: Ensure your underlying api.login wrapper receives the right variable
+      const result = await api.login(emailOrPhone, password);
       await persistSession(result.token, result.user);
       return result.user;
     },
     [persistSession],
   );
 
-  // Registration: Directly receives role from your sign up form input fields
+  // Registration: Receives clean structured parameters
   const register = useCallback(
     async (data: {
       username: string;
       email: string;
+      phone_number: string;
       password: string;
       role: UserRole;
       name?: string;
-      phone_number?: string;
       address?: string;
     }) => {
       await api.register({
-        ...data, // Explicitly forwards data.role passed into the function argument
+        ...data,
         latitude: location?.latitude,
         longitude: location?.longitude,
       });
@@ -150,7 +146,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       location,
       isLoading,
-      setRole,
       setLocation,
       login,
       register,
@@ -163,7 +158,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role,
       location,
       isLoading,
-      setRole,
       setLocation,
       login,
       register,

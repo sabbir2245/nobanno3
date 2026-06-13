@@ -2,6 +2,9 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.db.models import Sum
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from datetime import timedelta
+import random
 
 class User(AbstractUser):
     ROLE_CHOICES = (
@@ -11,9 +14,10 @@ class User(AbstractUser):
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='customer')
     name = models.CharField(max_length=255, blank=True)
-    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    phone_number = models.CharField(max_length=15, blank=True, null=True,)
     address = models.TextField(blank=True, null=True)
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    email = models.EmailField(unique=True)
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
     is_verified = models.BooleanField(default=False)
@@ -98,3 +102,21 @@ class Review(models.Model):
 
     def __str__(self):
         return f"Review by {self.customer.username} for {self.farmer.username} - {self.rating} stars"
+
+
+class OTP(models.Model):
+    METHOD_CHOICES = (
+        ('email', 'Email'),
+        ('sms', 'SMS'),
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
+    otp = models.CharField(max_length=6)
+    method = models.CharField(max_length=10, choices=METHOD_CHOICES, default='email')
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+
+    def is_expired(self):
+        return timezone.now() > self.created_at + timedelta(minutes=5)
+
+    def __str__(self):
+        return f"OTP {self.otp} for {self.user.username} ({self.method})"

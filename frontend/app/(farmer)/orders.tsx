@@ -59,8 +59,8 @@ export default function FarmerOrdersScreen() {
   return (
       <View style={styles.container}>
         <ScreenHeader 
-          title={t('Orders')} 
-          subtitle={t('Nobanno Farmer Hub')} 
+          title={t('অর্ডারসমূহ')} 
+          subtitle={t('নবান্ন ফার্মার হাব')} 
         />
         <ScrollView
           contentContainerStyle={styles.content}
@@ -69,7 +69,7 @@ export default function FarmerOrdersScreen() {
           }
         >
           {orders.length === 0 ? (
-            <Text style={styles.empty}>{t('No orders received yet.')}</Text>
+            <Text style={styles.empty}>{t('এখনো কোনো অর্ডার পাওয়া যায়নি।')}</Text>
           ) : (
             orders.map((order) => (
               <OrderCard
@@ -77,7 +77,7 @@ export default function FarmerOrdersScreen() {
                 order={order}
                 variant={variantFor(order.status)}
                 actionLabel={
-                  order.status === 'pending' ? t('Mark as Shipped') : undefined
+                  order.status === 'pending' ? t('পাঠানো হয়েছে চিহ্নিত করুন') : undefined
                 }
                 onAction={
                   order.status === 'pending'

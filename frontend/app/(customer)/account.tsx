@@ -127,10 +127,17 @@ export default function CustomerAccountScreen() {
         )}
 
         <PrimaryButton
+          title="Edit Profile"
+          onPress={() => router.push('/auth/update-profile')}
+          variant="sage"
+          style={{ marginTop: Spacing.md }}
+        />
+
+        <PrimaryButton
           title="Logout"
           onPress={handleLogout}
           variant="secondary"
-          style={{ marginTop: Spacing.xl }}
+          style={{ marginTop: Spacing.md }}
         />
       </ScrollView>
     </View>

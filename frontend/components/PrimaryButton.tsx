@@ -12,6 +12,7 @@ interface Props {
   title: string;
   onPress: () => void;
   loading?: boolean;
+  disabled?: boolean;
   variant?: 'primary' | 'secondary' | 'sage';
   style?: ViewStyle;
 }
@@ -20,6 +21,7 @@ export function PrimaryButton({
   title,
   onPress,
   loading,
+  disabled,
   variant = 'primary',
   style,
 }: Props) {
@@ -35,7 +37,7 @@ export function PrimaryButton({
         style,
       ]}
       onPress={onPress}
-      disabled={loading}
+      disabled={loading || disabled}
       activeOpacity={0.85}
     >
       {loading ? (

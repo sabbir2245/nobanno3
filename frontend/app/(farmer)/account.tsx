@@ -106,10 +106,17 @@ export default function FarmerAccountScreen() {
         </View>
 
         <PrimaryButton
+          title="Edit Profile"
+          onPress={() => router.push('/auth/update-profile')}
+          variant="sage"
+          style={{ marginTop: Spacing.md }}
+        />
+
+        <PrimaryButton
           title={t("লগআউট")}
           onPress={handleLogout}
           variant="secondary"
-          style={{ marginTop: Spacing.xl }}
+          style={{ marginTop: Spacing.md }}
         />
       </ScrollView>
     </View>

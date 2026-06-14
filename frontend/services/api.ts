@@ -280,6 +280,64 @@ export const api = {
       recent_transactions: Order[];
     }>('/farmer/wallet/', { method: 'GET' }, token),
 
+  updateProfileInfo: (token: string, body: Partial<Pick<User, 'name' | 'phone_number' | 'address' | 'email' | 'latitude' | 'longitude'>>) =>
+    request<User>(
+      '/profile/update/',
+      { method: 'PATCH', body: JSON.stringify(body) },
+      token,
+    ),
+
+  updatePost: async (
+    token: string,
+    id: number,
+    body: {
+      title?: string;
+      description?: string;
+      total_weight_kg?: number;
+      price_per_kg?: number;
+      latitude?: number;
+      longitude?: number;
+      imageUri?: string;
+    },
+  ) => {
+    if (body.imageUri) {
+      const formData = new FormData();
+      if (body.title) formData.append('title', body.title);
+      if (body.description) formData.append('description', body.description);
+      if (body.total_weight_kg) formData.append('total_weight_kg', body.total_weight_kg.toString());
+      if (body.price_per_kg) formData.append('price_per_kg', body.price_per_kg.toString());
+      if (body.latitude) formData.append('latitude', body.latitude.toString());
+      if (body.longitude) formData.append('longitude', body.longitude.toString());
+
+      const filename = body.imageUri.split('/').pop() || 'image.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      // @ts-ignore
+      formData.append('image', { uri: body.imageUri, name: filename, type });
+
+      const response = await fetch(`${API_BASE_URL}/posts/${id}/update/`, {
+        method: 'PATCH',
+        headers: { Authorization: `Token ${token}` },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try { errorData = await response.json(); }
+        catch { errorData = await response.text(); }
+        throw new ApiError('Failed to update post', response.status, errorData);
+      }
+
+      return response.json() as Promise<Post>;
+    } else {
+      return request<Post>(
+        `/posts/${id}/update/`,
+        { method: 'PATCH', body: JSON.stringify(body) },
+        token,
+      );
+    }
+  },
+
   forgotPassword: (email: string, method: 'email' | 'sms' = 'email') =>
     request<{ message: string }>('/auth/forgot-password/', {
       method: 'POST',

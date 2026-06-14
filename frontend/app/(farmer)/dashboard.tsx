@@ -145,7 +145,7 @@ export default function FarmerDashboardScreen() {
           <ProductCard
             key={post.id}
             post={post}
-            onPress={() => {}}
+            onPress={() => router.push(`/(farmer)/edit-post/${post.id}`)}
           />
         ))}
         {myPosts.length === 0 && (

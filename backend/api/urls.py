@@ -7,6 +7,7 @@ from .views import (
     ReviewViewSet, FarmerWalletView, AdminAnalyticsView,
     
 )
+from .update import UserUpdateView, PostUpdateView
 
 router = DefaultRouter()
 router.register(r'users', UserManagementViewSet, basename='user-mgmt')
@@ -30,4 +31,8 @@ urlpatterns = [
     # Custom dashboards
     path('farmer/wallet/', FarmerWalletView.as_view(), name='farmer-wallet'),
     path('admin/analytics/', AdminAnalyticsView.as_view(), name='admin-analytics'),
+
+    path('profile/update/', UserUpdateView.as_view(), name='profile-update'),
+    path('posts/<int:pk>/update/', PostUpdateView.as_view(), name='post-update'),
+    
 ]

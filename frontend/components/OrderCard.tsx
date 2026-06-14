@@ -31,12 +31,10 @@ export function OrderCard({
 
   const headerTitle =
     variant === 'paid'
-      ? 'Customer Orders - Paid'
+      ? 'গ্রাহকের অর্ডার — পরিশোধিত'
       : variant === 'shipped'
-        ? 'Order Fulfilled & Awaiting Delivery Confirmation'
-        : 'Order Delivered & Completed';
-
-  const detailLine = `${order.customer_name || order.customer_username} · ${order.post_title}`;
+        ? 'অর্ডার প্রেরিত — ডেলিভারি নিশ্চিতকরণ অপেক্ষিত'
+        : 'অর্ডার ডেলিভারি সম্পন্ন';
 
   return (
     <View style={styles.card}>
@@ -44,21 +42,21 @@ export function OrderCard({
         <Text style={[styles.headerText, { color: header.text }]}>{headerTitle}</Text>
       </View>
       <View style={styles.body}>
-        <Text style={styles.customer}>Customer: {order.customer_name || order.customer_username}</Text>
+        <Text style={styles.customer}>গ্রাহক: {order.customer_name || order.customer_username}</Text>
         <Text style={styles.product}>{order.post_title}</Text>
         <Text style={styles.detail}>
-          {qty.toFixed(0)} kg @ ৳ {pricePerKg.toFixed(0)}/kg = ৳{' '}
-          {parseFloat(order.total_paid).toFixed(0)}.{' '}
-          {order.status.toUpperCase()}.
+          {qty.toFixed(0)} কেজি @ ৳ {pricePerKg.toFixed(0)}/কেজি = ৳{' '}
+          {parseFloat(order.total_paid).toFixed(0)}।{' '}
+          {order.status === 'pending' ? 'অপেক্ষমান' : order.status === 'shipped' ? 'প্রেরিত' : order.status === 'completed' ? 'সম্পন্ন' : 'বাতিল'}।
         </Text>
         {variant === 'shipped' && (
           <Text style={styles.subDetail}>
-            Awaiting customer confirmation. Farmer rating pending.
+            গ্রাহকের নিশ্চিতকরণ অপেক্ষিত। ফারমার রেটিং অপেক্ষমান।
           </Text>
         )}
         {variant === 'completed' && (
           <Text style={styles.subDetail}>
-            Customer confirmed delivery. Payout released to wallet.
+            গ্রাহক ডেলিভারি নিশ্চিত করেছেন। পেমেন্ট ওয়ালেটে জমা হয়েছে।
           </Text>
         )}
         {onAction && actionLabel && (

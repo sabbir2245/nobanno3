@@ -11,12 +11,14 @@ interface Props {
 }
 
 export function ProductCard({ post, onPress, imageTint = Colors.lightGreen }: Props) {
-  const rating = 4.5;
+  const rating = post.farmer_avg_rating ?? 0;
+  const fullStars = Math.floor(rating);
+  const hasHalf = rating - fullStars >= 0.5;
+  const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       <View style={[styles.imageArea, { backgroundColor: imageTint }]}>
-        {/* Added Image component to render the post image */}
         {post.image ? (
           <Image 
             source={{ uri: post.image }} 
@@ -35,11 +37,14 @@ export function ProductCard({ post, onPress, imageTint = Colors.lightGreen }: Pr
         <Text style={styles.title}>{post.title}</Text>
         <Text style={styles.farmer}>{post.farmer_name || post.farmer_username}</Text>
         <View style={styles.ratingRow}>
-          {[1, 2, 3, 4].map((i) => (
-            <Ionicons key={i} name="star" size={14} color={Colors.starGold} />
+          {Array.from({ length: fullStars }).map((_, i) => (
+            <Ionicons key={`full-${i}`} name="star" size={14} color={Colors.starGold} />
           ))}
-          <Ionicons name="star-outline" size={14} color={Colors.starGold} />
-          <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+          {hasHalf && <Ionicons name="star-half" size={14} color={Colors.starGold} />}
+          {Array.from({ length: emptyStars }).map((_, i) => (
+            <Ionicons key={`empty-${i}`} name="star-outline" size={14} color={Colors.starGold} />
+          ))}
+          <Text style={styles.ratingText}>{rating > 0 ? rating.toFixed(1) : ''}</Text>
         </View>
         <Text style={styles.price}>
           ৳ {parseFloat(post.price_per_kg).toFixed(0)} / kg

@@ -1,8 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
- 
   ScrollView,
   TouchableOpacity,
   RefreshControl,
@@ -13,22 +12,28 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api, Order } from '@/services/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { ReviewFormModal } from '@/components/ReviewFormModal';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 import { globalstyles } from '@/styles/global';
-
 
 export default function CustomerAccountScreen() {
   const router = useRouter();
   const { token, user, logout, refreshProfile } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<{ postId: number; postTitle: string } | null>(null);
+  const [reviewedPostIds, setReviewedPostIds] = useState<Set<number>>(new Set());
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!token || !user) return;
     await refreshProfile();
-    const data = await api.getOrders(token);
-    setOrders(data);
-  }, [token, refreshProfile]);
+    const [orderData, reviewData] = await Promise.all([
+      api.getOrders(token),
+      api.getReviewsByCustomer(token, user.id),
+    ]);
+    setOrders(orderData);
+    setReviewedPostIds(new Set(reviewData.map((r) => r.post)));
+  }, [token, refreshProfile, user]);
 
   useFocusEffect(
     useCallback(() => {
@@ -57,6 +62,14 @@ export default function CustomerAccountScreen() {
       Alert.alert('Error', 'Could not complete order.');
     }
   };
+
+  const completedOrderFarmerIds = useMemo(() => {
+    const ids = new Set<number>();
+    orders.forEach((o) => {
+      if (o.status === 'completed' && o.post_farmer_id) ids.add(o.post_farmer_id);
+    });
+    return ids;
+  }, [orders]);
 
   return (
     <View style={globalstyles.container}>
@@ -114,6 +127,9 @@ export default function CustomerAccountScreen() {
                 {parseFloat(order.quantity_kg).toFixed(0)} kg · ৳{' '}
                 {parseFloat(order.total_paid).toFixed(0)}
               </Text>
+              <Text style={globalstyles.invoiceFarmer}>
+                Farmer: {order.post_farmer_name}
+              </Text>
               {order.status === 'shipped' && (
                 <PrimaryButton
                   title="Confirm Delivery"
@@ -122,6 +138,23 @@ export default function CustomerAccountScreen() {
                   style={{ marginTop: Spacing.sm }}
                 />
               )}
+              {order.status === 'completed' && reviewedPostIds.has(order.post) ? (
+                <View style={globalstyles.reviewDoneBadge}>
+                  <Text style={globalstyles.reviewDoneText}>Review Done</Text>
+                </View>
+              ) : order.status === 'completed' ? (
+                <PrimaryButton
+                  title="Write a Review"
+                  onPress={() =>
+                    setReviewTarget({
+                      postId: order.post,
+                      postTitle: order.post_title,
+                    })
+                  }
+                  variant="primary"
+                  style={{ marginTop: Spacing.sm }}
+                />
+              ) : null}
             </View>
           ))
         )}
@@ -140,6 +173,16 @@ export default function CustomerAccountScreen() {
           style={{ marginTop: Spacing.md }}
         />
       </ScrollView>
+
+      {reviewTarget && (
+        <ReviewFormModal
+          visible
+          postId={reviewTarget.postId}
+          postTitle={reviewTarget.postTitle}
+          onClose={() => setReviewTarget(null)}
+          onSuccess={load}
+        />
+      )}
     </View>
   );
 }

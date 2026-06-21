@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,17 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
-  Image, // Required for rendering the product images
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
-import { api, Post } from '@/services/api';
+import { api, Post, Review } from '@/services/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { ReviewCard } from '@/components/ReviewCard';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 
 const MIN_QTY = 10;
@@ -25,13 +27,31 @@ export default function ProductDetailScreen() {
   const { token, location } = useAuth();
   const { addItem } = useCart();
   const [post, setPost] = useState<Post | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
   const [quantity, setQuantity] = useState(MIN_QTY);
 
   useEffect(() => {
     if (!id) return;
-    // Fetching post data; ensures post.image is available if serializer is configured
     api.getPost(Number(id), token).then(setPost).catch(() => setPost(null));
   }, [id, token]);
+
+  const loadReviews = useCallback(async () => {
+    if (!post) return;
+    setReviewsLoading(true);
+    try {
+      const data = await api.getReviews(post.id);
+      setReviews(data);
+    } catch {
+      setReviews([]);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, [post]);
+
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
 
   if (!post) {
     return (
@@ -45,7 +65,17 @@ export default function ProductDetailScreen() {
   const maxQty = Math.floor(parseFloat(post.total_weight_kg));
   const pricePerKg = parseFloat(post.price_per_kg);
   const productCost = quantity * pricePerKg;
-  const rating = 4.9;
+
+  const avgRating = post.farmer_avg_rating ?? 0;
+  const ratingsCount = post.farmer_ratings_count ?? 0;
+  const fullStars = Math.floor(avgRating);
+  const hasHalf = avgRating - fullStars >= 0.5;
+  const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
+
+  const distribution = [0, 0, 0, 0, 0];
+  reviews.forEach((r) => {
+    if (r.rating >= 1 && r.rating <= 5) distribution[5 - r.rating]++;
+  });
 
   const adjustQty = (delta: number) => {
     setQuantity((q) => Math.min(maxQty, Math.max(MIN_QTY, q + delta)));
@@ -66,14 +96,9 @@ export default function ProductDetailScreen() {
         onBack={() => router.back()}
       />
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Gallery Section with dynamic Image rendering */}
         <View style={styles.gallery}>
           {post.image ? (
-            <Image 
-              source={{ uri: post.image }} 
-              style={styles.mainImage} 
-              resizeMode="cover" 
-            />
+            <Image source={{ uri: post.image }} style={styles.mainImage} resizeMode="cover" />
           ) : (
             <View style={styles.mainImage} />
           )}
@@ -84,7 +109,6 @@ export default function ProductDetailScreen() {
           </View>
         </View>
 
-        {/* Product Details Section */}
         <View style={styles.sellerCard}>
           <View style={styles.sellerAvatar}>
             <Ionicons name="person" size={28} color={Colors.white} />
@@ -93,10 +117,16 @@ export default function ProductDetailScreen() {
             <Text style={styles.productTitle}>{post.title}</Text>
             <Text style={styles.farmerName}>{post.farmer_name || post.farmer_username}</Text>
             <View style={styles.ratingRow}>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Ionicons key={i} name="star" size={14} color={Colors.starGold} />
+              {Array.from({ length: fullStars }).map((_, i) => (
+                <Ionicons key={`f-${i}`} name="star" size={14} color={Colors.starGold} />
               ))}
-              <Text style={styles.ratingText}>{rating}</Text>
+              {hasHalf && <Ionicons name="star-half" size={14} color={Colors.starGold} />}
+              {Array.from({ length: emptyStars }).map((_, i) => (
+                <Ionicons key={`e-${i}`} name="star-outline" size={14} color={Colors.starGold} />
+              ))}
+              <Text style={styles.ratingText}>
+                {avgRating > 0 ? `${avgRating.toFixed(1)} (${ratingsCount})` : 'No ratings'}
+              </Text>
             </View>
             <View style={styles.verifiedBadge}>
               <Ionicons name="checkmark-circle" size={14} color={Colors.darkGreen} />
@@ -152,7 +182,56 @@ export default function ProductDetailScreen() {
 
         <View style={styles.actionRow}>
           <PrimaryButton title="Place Bulk Order" onPress={addToCart} variant="sage" style={styles.primaryAction} />
-          <PrimaryButton title="Message Farmer" onPress={() => Alert.alert('Coming soon')} variant="secondary" style={styles.secondaryAction} />
+        </View>
+
+        {/* ─── REVIEWS SECTION ─── */}
+        <View style={styles.reviewsSection}>
+          <Text style={styles.sectionLabel}>Ratings & Reviews</Text>
+
+          {/* Summary Dashboard */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryLeft}>
+              <Text style={styles.bigRating}>
+                {avgRating > 0 ? avgRating.toFixed(1) : '--'}
+              </Text>
+              <Text style={styles.bigLabel}>out of 5</Text>
+              <View style={styles.summaryStars}>
+                {Array.from({ length: fullStars }).map((_, i) => (
+                  <Ionicons key={`sf-${i}`} name="star" size={16} color={Colors.starGold} />
+                ))}
+                {hasHalf && <Ionicons name="star-half" size={16} color={Colors.starGold} />}
+                {Array.from({ length: emptyStars }).map((_, i) => (
+                  <Ionicons key={`se-${i}`} name="star-outline" size={16} color={Colors.starGold} />
+                ))}
+              </View>
+              <Text style={styles.totalRatings}>{ratingsCount} total ratings</Text>
+            </View>
+            <View style={styles.summaryRight}>
+              {distribution.map((count, idx) => {
+                const star = 5 - idx;
+                const pct = ratingsCount > 0 ? (count / ratingsCount) * 100 : 0;
+                return (
+                  <View key={star} style={styles.barRow}>
+                    <Text style={styles.barLabel}>{star}</Text>
+                    <Ionicons name="star" size={10} color={Colors.starGold} />
+                    <View style={styles.barTrack}>
+                      <View style={[styles.barFill, { width: `${pct}%` }]} />
+                    </View>
+                    <Text style={styles.barCount}>{count}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Reviews List */}
+          {reviewsLoading ? (
+            <ActivityIndicator color={Colors.darkGreen} style={{ marginTop: Spacing.md }} />
+          ) : reviews.length === 0 ? (
+            <Text style={styles.emptyReviews}>No reviews yet.</Text>
+          ) : (
+            reviews.map((review) => <ReviewCard key={review.id} review={review} />)
+          )}
         </View>
       </ScrollView>
     </View>
@@ -195,4 +274,27 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: Spacing.sm },
   primaryAction: { flex: 2 },
   secondaryAction: { flex: 1 },
+
+  // Review section
+  reviewsSection: { marginTop: Spacing.lg },
+  summaryCard: {
+    flexDirection: 'row',
+    backgroundColor: Colors.cream,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  summaryLeft: { alignItems: 'center', justifyContent: 'center', minWidth: 100 },
+  bigRating: { fontFamily: Fonts.bold, fontSize: 36, color: Colors.textDark },
+  bigLabel: { fontFamily: Fonts.regular, fontSize: 12, color: Colors.textMuted, marginTop: -4 },
+  summaryStars: { flexDirection: 'row', gap: 1, marginTop: Spacing.xs },
+  totalRatings: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted, marginTop: 2 },
+  summaryRight: { flex: 1, gap: 4 },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  barLabel: { fontFamily: Fonts.medium, fontSize: 11, color: Colors.textDark, width: 12 },
+  barTrack: { flex: 1, height: 6, backgroundColor: Colors.lightGreen, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: 6, backgroundColor: Colors.starGold, borderRadius: 3 },
+  barCount: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted, width: 20, textAlign: 'right' },
+  emptyReviews: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.md },
 });

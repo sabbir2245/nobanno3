@@ -51,17 +51,28 @@ export default function LoginScreen(): React.JSX.Element {
     
     setLoading(true);
     try {
+      console.log(`[LOGIN] Attempting login with identity: "${identityInput.trim()}"`);
       // Pass raw text directly (handles username, email, or phone back-end side)
       const loggedInUser = await login(identityInput.trim(), password);
+      console.log(`[LOGIN] Success! User role: ${loggedInUser?.role}, id: ${loggedInUser?.id}`);
+      console.log(`[LOGIN] Full user object:`, JSON.stringify(loggedInUser, null, 2));
       
       if (loggedInUser?.role === 'farmer') {
         router.replace('/(farmer)/dashboard');
       } else if (loggedInUser?.role === 'customer') {
         router.replace('/(customer)/home');
       } else {
+        console.log(`[LOGIN] Unknown role: "${loggedInUser?.role}"`);
         throw new Error(t('Unknown user role'));
       }
     } catch (err: any) {
+      console.log(`[LOGIN] ERROR CAUGHT:`);
+      console.log(`[LOGIN]   err.message:`, err.message);
+      console.log(`[LOGIN]   err.status:`, err.status);
+      console.log(`[LOGIN]   err.data:`, JSON.stringify(err.data, null, 2));
+      console.log(`[LOGIN]   err instanceof ApiError:`, err instanceof ApiError);
+      console.log(`[LOGIN]   err.constructor.name:`, err.constructor.name);
+      console.log(`[LOGIN]   Full error:`, err);
       const msg = err instanceof ApiError ? err.message : 'Login failed';
       Alert.alert('Login failed', msg);
     } finally {

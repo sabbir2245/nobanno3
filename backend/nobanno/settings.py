@@ -20,7 +20,7 @@ SECRET_KEY = 'django-insecure-r=e*)_!hg93m=x89d_=(k9*9c)uhy&5rxodfrm^#e^!c41_xj*
 DEBUG = True
 
 # Ensure your PC's local network IP matches this when testing with a real phone
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.100', '10.174.158.253']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.100', '192.168.1.162', '10.174.158.253']
 
 
 # Application definition

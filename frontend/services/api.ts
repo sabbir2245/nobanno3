@@ -1,5 +1,7 @@
 import { API_BASE_URL } from '@/constants/api';
 
+console.log(`[API] API_BASE_URL = "${API_BASE_URL}"`);
+
 export type UserRole = 'customer' | 'farmer';
 
 export interface User {
@@ -15,6 +17,7 @@ export interface User {
   longitude: number | null;
   is_verified: boolean;
   avg_rating: number | null;
+  ratings_count: number;
   total_sales: string | null;
 }
 
@@ -29,6 +32,8 @@ export interface Post {
   farmer: number;
   farmer_name: string;
   farmer_username: string;
+  farmer_avg_rating: number | null;
+  farmer_ratings_count: number;
   total_price: number;
   distance_km?: number;
   created_at: string;
@@ -47,19 +52,29 @@ export interface Order {
   delivery_address: string;
   post_title: string;
   post_farmer_name: string;
+  post_farmer_id: number;
   customer_username: string;
   customer_name: string;
   created_at: string;
 }
 
+export interface ReviewImage {
+  id: number;
+  image: string | null;
+  image_url: string | null;
+}
+
 export interface Review {
   id: number;
-  farmer: number;
+  post: number;
   customer: number;
   rating: number;
   comment: string;
   farmer_username: string;
+  farmer_id: number;
+  post_title: string;
   customer_username: string;
+  images: ReviewImage[];
   created_at: string;
 }
 
@@ -87,13 +102,25 @@ async function request<T>(
     headers.Authorization = `Token ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const url = `${API_BASE_URL}${path}`;
+  console.log(`[API] REQUEST: ${options.method || 'GET'} ${url}`);
+  if (options.body) console.log(`[API] BODY:`, options.body);
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers });
+  } catch (fetchErr: any) {
+    console.log(`[API] FETCH ERROR: ${fetchErr.message}`);
+    console.log(`[API] This usually means the server is unreachable. Check: 1) Server is running, 2) HOST in api.ts matches server IP, 3) ALLOWED_HOSTS on server includes this IP`);
+    throw new ApiError(`Network error: ${fetchErr.message}`, 0, null);
+  }
+
+  console.log(`[API] RESPONSE STATUS: ${response.status} ${response.statusText}`);
 
   let data: unknown = null;
   const text = await response.text();
+  console.log(`[API] RAW RESPONSE TEXT:`, text);
+
   if (text) {
     try {
       data = JSON.parse(text);
@@ -103,15 +130,18 @@ async function request<T>(
   }
 
   if (!response.ok) {
+    console.log(`[API] ERROR DATA:`, JSON.stringify(data, null, 2));
     const message =
       typeof data === 'object' && data !== null && 'error' in data
         ? String((data as { error: string }).error)
         : typeof data === 'object' && data !== null && 'non_field_errors' in data
           ? String((data as { non_field_errors: string[] }).non_field_errors[0])
           : `Request failed (${response.status})`;
+    console.log(`[API] THROWING: "${message}"`);
     throw new ApiError(message, response.status, data);
   }
 
+  console.log(`[API] SUCCESS DATA:`, JSON.stringify(data).substring(0, 200));
   return data as T;
 }
 
@@ -260,7 +290,7 @@ export const api = {
 
   createReview: (
     token: string,
-    body: { farmer: number; rating: number; comment: string },
+    body: { post: number; rating: number; comment: string },
   ) =>
     request<Review>(
       '/reviews/',
@@ -268,8 +298,43 @@ export const api = {
       token,
     ),
 
-  getReviews: (farmerId: number) =>
-    request<Review[]>(`/reviews/?farmer_id=${farmerId}`, { method: 'GET' }),
+  createReviewWithImages: async (
+    token: string,
+    body: { post: number; rating: number; comment: string; imageUris?: string[] },
+  ) => {
+    if (body.imageUris && body.imageUris.length > 0) {
+      const formData = new FormData();
+      formData.append('post', String(body.post));
+      formData.append('rating', String(body.rating));
+      formData.append('comment', body.comment);
+      for (const uri of body.imageUris.slice(0, 3)) {
+        const filename = uri.split('/').pop() || 'image.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        // @ts-ignore
+        formData.append('uploaded_images', { uri, name: filename, type });
+      }
+      const response = await fetch(`${API_BASE_URL}/reviews/`, {
+        method: 'POST',
+        headers: { Authorization: `Token ${token}` },
+        body: formData,
+      });
+      if (!response.ok) {
+        let errorData;
+        try { errorData = await response.json(); }
+        catch { errorData = await response.text(); }
+        throw new ApiError('Failed to create review', response.status, errorData);
+      }
+      return response.json() as Promise<Review>;
+    }
+    return api.createReview(token, { post: body.post, rating: body.rating, comment: body.comment });
+  },
+
+  getReviews: (postId: number) =>
+    request<Review[]>(`/reviews/?post_id=${postId}`, { method: 'GET' }),
+
+  getReviewsByCustomer: (token: string, customerId: number) =>
+    request<Review[]>(`/reviews/?customer_id=${customerId}`, { method: 'GET' }, token),
 
   getFarmerWallet: (token: string) =>
     request<{

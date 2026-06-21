@@ -21,16 +21,9 @@ class User(AbstractUser):
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
     is_verified = models.BooleanField(default=False)
+    average_rating = models.FloatField(null=True, blank=True, default=None)
+    ratings_count = models.IntegerField(default=0)
 
-    @property
-    def avg_rating(self):
-        if self.role != 'farmer':
-            return None
-        reviews = self.received_reviews.all()
-        if not reviews.exists():
-            return 0.0
-        return round(sum(r.rating for r in reviews) / len(reviews), 2)
-    
     @property
     def total_sales(self):
         if self.role != 'farmer':
@@ -90,18 +83,23 @@ class Order(models.Model):
 
 class Review(models.Model):
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='given_reviews', limit_choices_to={'role': 'customer'})
-    farmer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_reviews', limit_choices_to={'role': 'farmer'})
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='reviews')
     rating = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     comment = models.TextField(blank=True)
-    image_url = models.URLField(max_length=500, blank=True, null=True)
-    image = models.ImageField(upload_to='review_images/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('customer', 'farmer')
+        unique_together = ('customer', 'post')
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"Review by {self.customer.username} for {self.farmer.username} - {self.rating} stars"
+        return f"Review by {self.customer.username} on {self.post.title} - {self.rating} stars"
+
+
+class ReviewImage(models.Model):
+    review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='review_images/', blank=True, null=True)
+    image_url = models.URLField(max_length=500, blank=True, null=True)
 
 
 class OTP(models.Model):

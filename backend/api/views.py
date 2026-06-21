@@ -357,14 +357,28 @@ class ReviewViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated(), IsOwnerOrReadOnly()]
         return [permissions.AllowAny()]
 
-    def perform_create(self, serializer):
-        serializer.save(customer=self.request.user)
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        review = serializer.save(customer=request.user)
+        images = request.FILES.getlist('uploaded_images')
+        for img in images[:3]:
+            ReviewImage.objects.create(review=review, image=img)
+        serializer = self.get_serializer(review)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         farmer_id = request.query_params.get('farmer_id')
         if farmer_id:
-            queryset = queryset.filter(farmer_id=farmer_id)
+            queryset = queryset.filter(post__farmer_id=farmer_id)
+        post_id = request.query_params.get('post_id')
+        if post_id:
+            queryset = queryset.filter(post_id=post_id)
+        customer_id = request.query_params.get('customer_id')
+        if customer_id:
+            queryset = queryset.filter(customer_id=customer_id)
         
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)

@@ -129,7 +129,25 @@ export const globalstyles = StyleSheet.create( {
         color: Colors.textMuted,
         marginTop: 2,
       },
-
+      invoiceFarmer: {
+        fontFamily: Fonts.regular,
+        fontSize: 12,
+        color: Colors.mediumGreen,
+        marginTop: 4,
+      },
+      reviewDoneBadge: {
+        marginTop: Spacing.sm,
+        backgroundColor: Colors.lightGreen,
+        borderRadius: Radius.pill,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        alignSelf: 'flex-start',
+      },
+      reviewDoneText: {
+        fontFamily: Fonts.medium,
+        fontSize: 13,
+        color: Colors.mediumGreen,
+      },
 
     }
 )

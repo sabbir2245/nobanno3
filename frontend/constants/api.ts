@@ -6,6 +6,6 @@ import { Platform } from 'react-native';
 //const HOST = '10.174.158.253';
 
 
-const HOST = '192.168.1.100';
+const HOST = '192.168.1.162';
 
 export const API_BASE_URL = `http://${HOST}:8000/api`;

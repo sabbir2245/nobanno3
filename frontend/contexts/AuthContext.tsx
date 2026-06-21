@@ -95,9 +95,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Login: Pass emailOrPhone directly downstream
   const login = useCallback(
     async (emailOrPhone: string, password: string) => {
-      // CHANGE 4: Ensure your underlying api.login wrapper receives the right variable
+      console.log(`[AUTH] Calling api.login(${emailOrPhone}, [password hidden])`);
       const result = await api.login(emailOrPhone, password);
+      console.log(`[AUTH] api.login returned token: ${result.token?.substring(0, 12)}...`);
+      console.log(`[AUTH] api.login returned user:`, JSON.stringify(result.user, null, 2));
       await persistSession(result.token, result.user);
+      console.log(`[AUTH] Session persisted to AsyncStorage`);
       return result.user;
     },
     [persistSession],

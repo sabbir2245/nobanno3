@@ -2,14 +2,15 @@ from decimal import Decimal
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from .models import Post, Order, Review, OTP
+from .models import Post, Order, Review, ReviewImage, OTP
 from rest_framework.validators import UniqueValidator
 
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
-    avg_rating = serializers.ReadOnlyField()
+    avg_rating = serializers.FloatField(source='average_rating', read_only=True, allow_null=True)
     total_sales = serializers.ReadOnlyField()
+    ratings_count = serializers.IntegerField(read_only=True)
     
     email = serializers.EmailField(
         validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this email already exists.")]
@@ -24,9 +25,9 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'role', 'name', 
             'phone_number', 'address', 'balance', 
             'latitude', 'longitude', 'is_verified',
-            'avg_rating', 'total_sales'
+            'avg_rating', 'ratings_count', 'total_sales'
         )
-        read_only_fields = ('balance', 'is_verified', 'avg_rating', 'total_sales')
+        read_only_fields = ('balance', 'is_verified', 'avg_rating', 'ratings_count', 'total_sales')
 
 # In your serializers.py
 class EmailOrPhoneAuthSerializer(serializers.Serializer):
@@ -95,6 +96,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 class PostSerializer(serializers.ModelSerializer):
     farmer_name = serializers.ReadOnlyField(source='farmer.name')
     farmer_username = serializers.ReadOnlyField(source='farmer.username')
+    farmer_avg_rating = serializers.FloatField(source='farmer.average_rating', read_only=True, allow_null=True)
+    farmer_ratings_count = serializers.IntegerField(source='farmer.ratings_count', read_only=True)
     total_price = serializers.SerializerMethodField()
     class Meta:
         model = Post
@@ -131,6 +134,7 @@ class OrderSerializer(serializers.ModelSerializer):
     customer_name = serializers.ReadOnlyField(source='customer.name')
     post_title = serializers.ReadOnlyField(source='post.title')
     post_farmer_name = serializers.ReadOnlyField(source='post.farmer.name')
+    post_farmer_id = serializers.ReadOnlyField(source='post.farmer.id')
 
     class Meta:
         model = Order
@@ -204,10 +208,19 @@ class OrderSerializer(serializers.ModelSerializer):
             return order
 
 
+class ReviewImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReviewImage
+        fields = ('id', 'image', 'image_url')
+
+
 class ReviewSerializer(serializers.ModelSerializer):
     customer_username = serializers.ReadOnlyField(source='customer.username')
     customer_name = serializers.ReadOnlyField(source='customer.name')
-    farmer_username = serializers.ReadOnlyField(source='farmer.username')
+    post_title = serializers.ReadOnlyField(source='post.title')
+    farmer_username = serializers.ReadOnlyField(source='post.farmer.username')
+    farmer_id = serializers.ReadOnlyField(source='post.farmer.id')
+    images = ReviewImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Review
@@ -216,25 +229,22 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         customer = self.context['request'].user
-        farmer = attrs.get('farmer')
+        post = attrs.get('post')
         rating = attrs.get('rating')
 
         if rating < 1 or rating > 5:
             raise serializers.ValidationError({"rating": "Rating must be between 1 and 5."})
 
-        if farmer.role != 'farmer':
-            raise serializers.ValidationError({"farmer": "You can only review users with the 'farmer' role."})
-
-        # Check if customer has a completed order from this farmer
+        # Check if customer has a completed order for this specific post
         has_completed_order = Order.objects.filter(
             customer=customer,
-            post__farmer=farmer,
+            post=post,
             status='completed'
         ).exists()
 
         if not has_completed_order:
             raise serializers.ValidationError(
-                {"non_field_errors": "You can only review a farmer after completing a purchase from them."}
+                {"non_field_errors": "You can only review a product after completing a purchase for it."}
             )
 
         return attrs

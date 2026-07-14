@@ -20,7 +20,7 @@ SECRET_KEY = 'django-insecure-r=e*)_!hg93m=x89d_=(k9*9c)uhy&5rxodfrm^#e^!c41_xj*
 DEBUG = True
 
 # Ensure your PC's local network IP matches this when testing with a real phone
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.100', '192.168.1.162', '10.174.158.253']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.100', '192.168.1.162', '10.174.158.253', '10.18.98.66', '10.18.98.199', '10.148.244.225', '*']
 
 
 # Application definition
@@ -71,19 +71,36 @@ WSGI_APPLICATION = 'nobanno.wsgi.application'
 
 
 # Database Configuration
-# Seamlessly transitions to PostgreSQL, falling back to local defaults if .env is missing
+# PostgreSQL by default; set USE_SQLITE=true in .env for SQLite
 import sys
 TESTING = 'test' in sys.argv or 'test_password_reset_flow' in sys.argv[0]
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3' if TESTING else 'django.db.backends.postgresql',
-        'NAME': ':memory:' if TESTING else os.environ['DB_NAME'],
-        'USER': os.environ.get('DB_USER', '') if not TESTING else '',
-        'PASSWORD': os.environ.get('DB_PASSWORD', '') if not TESTING else '',
-        'HOST': os.environ.get('DB_HOST', 'localhost') if not TESTING else '',
-        'PORT': os.environ.get('DB_PORT', '5432') if not TESTING else '',
+USE_SQLITE = os.environ.get('USE_SQLITE', 'false').lower() == 'true'
+
+if TESTING:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
     }
-}
+elif USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ['DB_NAME'],
+            'USER': os.environ.get('DB_USER', ''),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
 
 
 # Password validation

@@ -20,6 +20,11 @@ export const globalstyles = StyleSheet.create( {
         marginBottom: Spacing.md,
         gap: Spacing.md,
       },
+      avatarImage: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+      },
       avatar: {
         width: 56,
         height: 56,

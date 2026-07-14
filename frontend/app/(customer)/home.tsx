@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -12,25 +12,29 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, Post } from '@/services/api';
+import { api, Post, ProductType } from '@/services/api';
 import { ProductCard } from '@/components/ProductCard';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 
-const CATEGORIES = ['All', 'Grains', 'Vegetables', 'Fruits', 'Dairy'];
 const SORT_OPTIONS = ['Nearest', 'Price: Low', 'Price: High', 'Stock'];
-
 const imageTints = [Colors.lightGreen, '#FFE4C4', Colors.paleYellow, Colors.sageGreen];
 
 export default function CustomerHomeScreen() {
   const router = useRouter();
   const { token, location } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('All');
+  const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState('Nearest');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showSearchFilters, setShowSearchFilters] = useState(false);
+
+  useEffect(() => {
+    api.getProductTypes(token ?? null).then(setProductTypes).catch(() => {});
+  }, [token]);
 
   const loadPosts = useCallback(async () => {
     if (!token || !location) return;
@@ -50,11 +54,14 @@ export default function CustomerHomeScreen() {
           radius: 200,
         });
       }
+      if (selectedTypeId) {
+        data = data.filter((p) => p.product_type === selectedTypeId);
+      }
       setPosts(data);
     } catch {
       setPosts([]);
     }
-  }, [token, location, search]);
+  }, [token, location, search, selectedTypeId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -69,17 +76,7 @@ export default function CustomerHomeScreen() {
     setRefreshing(false);
   };
 
-  const filtered = posts.filter((p) => {
-    if (category === 'All') return true;
-    const title = p.title.toLowerCase();
-    if (category === 'Grains') return /rice|dal|lentil|grain|wheat/.test(title);
-    if (category === 'Vegetables') return /alu|potato|tomato|chilli|vegetable|onion/.test(title);
-    if (category === 'Fruits') return /mango|fruit|banana|papaya/.test(title);
-    if (category === 'Dairy') return /curd|milk|doi|dairy/.test(title);
-    return true;
-  });
-
-  const sorted = [...filtered].sort((a, b) => {
+  const sorted = [...posts].sort((a, b) => {
     if (sortBy === 'Nearest') {
       return (a.distance_km ?? 999) - (b.distance_km ?? 999);
     }
@@ -120,8 +117,42 @@ export default function CustomerHomeScreen() {
             onSubmitEditing={loadPosts}
             returnKeyType="search"
           />
+          <TouchableOpacity onPress={() => setShowSearchFilters(!showSearchFilters)}>
+            <Ionicons name="options" size={18} color={Colors.lightGreen} />
+          </TouchableOpacity>
         </View>
       </View>
+
+      {showSearchFilters && (
+        <View style={styles.filterPanel}>
+          <Text style={styles.filterLabel}>Filter by type:</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterTypeRow}
+          >
+            <TouchableOpacity
+              style={[styles.filterChip, selectedTypeId === null && styles.chipActive]}
+              onPress={() => setSelectedTypeId(null)}
+            >
+              <Text style={[styles.filterChipText, selectedTypeId === null && styles.chipTextActive]}>
+                All
+              </Text>
+            </TouchableOpacity>
+            {productTypes.map((pt) => (
+              <TouchableOpacity
+                key={pt.id}
+                style={[styles.filterChip, selectedTypeId === pt.id && styles.chipActive]}
+                onPress={() => setSelectedTypeId(pt.id)}
+              >
+                <Text style={[styles.filterChipText, selectedTypeId === pt.id && styles.chipTextActive]}>
+                  {pt.name_bn || pt.name_en}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       <ScrollView
         horizontal
@@ -129,14 +160,22 @@ export default function CustomerHomeScreen() {
         style={styles.categories}
         contentContainerStyle={styles.categoriesContent}
       >
-        {CATEGORIES.map((cat) => (
+        <TouchableOpacity
+          style={[styles.chip, selectedTypeId === null && styles.chipActive]}
+          onPress={() => setSelectedTypeId(null)}
+        >
+          <Text style={[styles.chipText, selectedTypeId === null && styles.chipTextActive]}>
+            সব
+          </Text>
+        </TouchableOpacity>
+        {productTypes.map((pt) => (
           <TouchableOpacity
-            key={cat}
-            style={[styles.chip, category === cat && styles.chipActive]}
-            onPress={() => setCategory(cat)}
+            key={pt.id}
+            style={[styles.chip, selectedTypeId === pt.id && styles.chipActive]}
+            onPress={() => setSelectedTypeId(pt.id)}
           >
-            <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>
-              {cat}
+            <Text style={[styles.chipText, selectedTypeId === pt.id && styles.chipTextActive]}>
+              {pt.name_bn || pt.name_en}
             </Text>
           </TouchableOpacity>
         ))}
@@ -204,6 +243,11 @@ const styles = StyleSheet.create({
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mediumGreen, alignItems: 'center', justifyContent: 'center' },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.pill, paddingHorizontal: Spacing.md, gap: Spacing.sm },
   searchInput: { flex: 1, fontFamily: Fonts.regular, fontSize: 14, color: Colors.white, paddingVertical: Spacing.sm },
+  filterPanel: { backgroundColor: Colors.white, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  filterLabel: { fontFamily: Fonts.medium, fontSize: 12, color: Colors.textMuted, marginBottom: Spacing.xs },
+  filterTypeRow: { gap: Spacing.sm, alignItems: 'center' },
+  filterChip: { backgroundColor: Colors.lightGreen, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  filterChipText: { fontFamily: Fonts.medium, fontSize: 13, color: Colors.darkGreen },
   categories: { maxHeight: 52, backgroundColor: Colors.paleGreen },
   categoriesContent: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm, alignItems: 'center' },
   chip: { backgroundColor: Colors.lightGreen, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },

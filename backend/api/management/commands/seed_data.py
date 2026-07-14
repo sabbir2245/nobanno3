@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.authtoken.models import Token
-from api.models import Post, Order, Review
+from api.models import Post, Order, Review, ProductType
 from django.db import transaction
 
 User = get_user_model()
@@ -19,6 +19,7 @@ class Command(BaseCommand):
         Post.objects.all().delete()
         User.objects.all().delete()
         Token.objects.all().delete()
+        ProductType.objects.all().delete()
 
         # ==========================================
         # 1. CREATING USERS
@@ -27,7 +28,7 @@ class Command(BaseCommand):
 
         # Admin (unchanged)
         admin_user = User.objects.create_superuser(
-            username="admin", email="admin@nobanno.gov.bd", password="adminpassword123",
+            username="admin", email="admin@nobanno.gov.bd",             password="Adminpassword123",
             role="admin", name="Super Admin", phone_number="01000000000",
             address="Dhaka Secretariat", latitude=23.7291, longitude=90.4087, is_verified=True
         )
@@ -35,27 +36,27 @@ class Command(BaseCommand):
 
         # 5 Farmers (unchanged)
         f1 = User.objects.create_user(
-            username="fjamal", email="jamal@farms.com", password="f1",
+            username="fjamal", email="jamal@farms.com",             password="F1",
             role="farmer", name="Jamal Uddin", phone_number="01712345678",
             address="Mymensingh Sadar, Mymensingh", latitude=24.7578, longitude=90.4003, is_verified=True
         )
         f2 = User.objects.create_user(
-            username="frahim", email="rahim@bogura.com", password="f2",
+            username="frahim", email="rahim@bogura.com",             password="F2",
             role="farmer", name="Rahim Mia", phone_number="01812345678",
             address="Sherpur, Bogura", latitude=24.8481, longitude=89.3730, is_verified=True
         )
         f3 = User.objects.create_user(
-            username="fkarim", email="karim@rajshahi.com", password="f3",
+            username="fkarim", email="karim@rajshahi.com",             password="F3",
             role="farmer", name="Karim Ahmed", phone_number="01612345678",
             address="Paba, Rajshahi", latitude=24.3745, longitude=88.6042, is_verified=True
         )
         f4 = User.objects.create_user(
-            username="fselim", email="selim@jashore.com", password="f4",
+            username="fselim", email="selim@jashore.com",             password="F4",
             role="farmer", name="Selim Hossain", phone_number="01512345678",
             address="Benapole, Jashore", latitude=23.1664, longitude=89.2081, is_verified=True
         )
         f5 = User.objects.create_user(
-            username="farif", email="arif@comilla.com", password="f5",
+            username="farif", email="arif@comilla.com",             password="F5",
             role="farmer", name="Arif Chowdhury", phone_number="01998765432",
             address="Nangalkot, Comilla", latitude=23.4607, longitude=91.1809, is_verified=True
         )
@@ -64,13 +65,13 @@ class Command(BaseCommand):
 
         # 2 Customers (unchanged)
         c1 = User.objects.create_user(
-            username="csadia", email="sadia@restaurant.com", password="c123",
+            username="csadia", email="sadia@restaurant.com",             password="C123",
             role="customer", name="Sadia's Kitchen", phone_number="01912345678",
             address="Road 11, Banani, Dhaka", latitude=23.7937, longitude=90.4066,
             balance=100000.00, is_verified=True
         )
         c2 = User.objects.create_user(
-            username="chasan", email="hasan@retail.com", password="c23",
+            username="chasan", email="hasan@retail.com",             password="C23",
             role="customer", name="Hasan Groceries", phone_number="01512345678",
             address="Sector 4, Uttara, Dhaka", latitude=23.8759, longitude=90.3795,
             balance=35000.00, is_verified=True
@@ -79,7 +80,53 @@ class Command(BaseCommand):
             Token.objects.create(user=c)
 
         # ==========================================
-        # 2. IMAGE UTILITY
+        # 2. PRODUCT TYPES
+        # ==========================================
+        self.stdout.write("Seeding product types...")
+        product_types_data = [
+            ("Potato", "আলু"),
+            ("Onion", "পেঁয়াজ"),
+            ("Garlic", "রসুন"),
+            ("Ginger", "আদা"),
+            ("Green Chili", "কাঁচামরিচ"),
+            ("Tomato", "টমেটো"),
+            ("Eggplant", "বেগুন"),
+            ("Pointed Gourd", "পটল"),
+            ("Okra", "ঢেঁড়স"),
+            ("Bitter Gourd", "করলা"),
+            ("Bitter Gourd (Small)", "উচ্ছে"),
+            ("Bottle Gourd", "লাউ"),
+            ("Sweet Pumpkin", "মিষ্টি কুমড়া"),
+            ("Ash Gourd", "চাল কুমড়া"),
+            ("Cucumber", "শসা"),
+            ("Cauliflower", "ফুলকপি"),
+            ("Cabbage", "বাঁধাকপি"),
+            ("Carrot", "গাজর"),
+            ("Radish", "মুলা"),
+            ("Ridge Gourd", "ঝিঙে"),
+            ("Snake Gourd", "চিচিঙ্গা"),
+            ("Sponge Gourd", "ধুনদুল"),
+            ("Spiny Gourd", "কাঁকরোল"),
+            ("Drumstick", "সাজনা"),
+            ("Raw Papaya", "পেঁপে (কাঁচা)"),
+            ("Raw Banana", "কলা (কাঁচা)"),
+            ("Taro (Man Kochu)", "মানকচু"),
+            ("Taro (Mouchi Kochu)", "মুখী কচু"),
+            ("Taro Leaf", "কচু শাক"),
+            ("Red Amaranth", "লাল শাক"),
+            ("Spinach", "পালং শাক"),
+            ("Malabar Spinach", "পুই শাক"),
+            ("Water Spinach", "কলমি শাক"),
+            ("Coriander Leaf", "ধনেপাতা"),
+        ]
+        product_type_map = {}
+        for name_en, name_bn in product_types_data:
+            pt = ProductType.objects.create(name_en=name_en, name_bn=name_bn)
+            product_type_map[name_en] = pt
+        self.stdout.write(f"  Created {len(product_types_data)} product types.")
+
+        # ==========================================
+        # 3. IMAGE UTILITY
         # ==========================================
         self.stdout.write("Processing images from timage directory...")
         timage_dir = os.path.join(settings.BASE_DIR, 'timage')
@@ -105,29 +152,29 @@ class Command(BaseCommand):
                 return SimpleUploadedFile(name=f"fallback_{filename}.gif", content=fallback_bytes, content_type='image/gif')
 
         # ==========================================
-        # 3. POSTS
+        # 4. POSTS
         # ==========================================
         self.stdout.write("Creating listings...")
 
         # Farmer 1 — fjamal (5 posts)
         p_banana_avg = Post.objects.create(
-            farmer=f1, title="Sagar Banana (Medium Size)", price_per_kg=40.00, total_weight_kg=500.00,
+            farmer=f1, product_type=product_type_map.get("Raw Banana"), title="Sagar Banana (Medium Size)", price_per_kg=40.00, total_weight_kg=500.00,
             description="Sweet, uniform medium size organic bananas.",
             latitude=f1.latitude, longitude=f1.longitude, image=get_image_file("banana_avg.jpg"))
         p_banana_large = Post.objects.create(
-            farmer=f1, title="Premium Giant Bananas", price_per_kg=55.00, total_weight_kg=300.00,
+            farmer=f1, product_type=product_type_map.get("Raw Banana"), title="Premium Giant Bananas", price_per_kg=55.00, total_weight_kg=300.00,
             description="Large variety high yield banana for wholesale.",
             latitude=f1.latitude, longitude=f1.longitude, image=get_image_file("banana_large.jpg"))
         p_banana_short = Post.objects.create(
-            farmer=f1, title="Champa Banana (Short Variety)", price_per_kg=35.00, total_weight_kg=600.00,
+            farmer=f1, product_type=product_type_map.get("Raw Banana"), title="Champa Banana (Short Variety)", price_per_kg=35.00, total_weight_kg=600.00,
             description="Traditional sweet short variety Champa banana.",
             latitude=f1.latitude, longitude=f1.longitude, image=get_image_file("banana_short.jpg"))
         p_carrot1 = Post.objects.create(
-            farmer=f1, title="Fresh Spring Carrots (Grade A)", price_per_kg=60.00, total_weight_kg=400.00,
+            farmer=f1, product_type=product_type_map.get("Carrot"), title="Fresh Spring Carrots (Grade A)", price_per_kg=60.00, total_weight_kg=400.00,
             description="Fresh organic crunchy sweet orange carrots.",
             latitude=f1.latitude, longitude=f1.longitude, image=get_image_file("carrot1.jpg"))
         p_carrot2 = Post.objects.create(
-            farmer=f1, title="Juicing Carrots Bulk", price_per_kg=45.00, total_weight_kg=1200.00,
+            farmer=f1, product_type=product_type_map.get("Carrot"), title="Juicing Carrots Bulk", price_per_kg=45.00, total_weight_kg=1200.00,
             description="Bulk carrots for commercial juicing.",
             latitude=f1.latitude, longitude=f1.longitude, image=get_image_file("carrot2.jpg"))
 
@@ -137,18 +184,82 @@ class Command(BaseCommand):
             description="Freshly handpicked sweet red cherries.",
             latitude=f2.latitude, longitude=f2.longitude, image=get_image_file("cherries1.jpg"))
         p_cucumber = Post.objects.create(
-            farmer=f2, title="Green Salad Cucumber Bulk", price_per_kg=42.00, total_weight_kg=1000.00,
+            farmer=f2, product_type=product_type_map.get("Cucumber"), title="Green Salad Cucumber Bulk", price_per_kg=42.00, total_weight_kg=1000.00,
             description="Standard size greenhouse grown salad cucumbers.",
             latitude=f2.latitude, longitude=f2.longitude, image=get_image_file("cucumber.jpg"))
 
         # Farmer 3 — fkarim (for csadia's shipped order)
         p_eggplant = Post.objects.create(
-            farmer=f3, title="Long Purple Eggplant (Begun)", price_per_kg=65.00, total_weight_kg=450.00,
+            farmer=f3, product_type=product_type_map.get("Eggplant"), title="Long Purple Eggplant (Begun)", price_per_kg=65.00, total_weight_kg=450.00,
             description="Fresh long tender purple eggplants.",
             latitude=f3.latitude, longitude=f3.longitude, image=get_image_file("eggplant_long.jpg"))
+        p_tomato = Post.objects.create(
+            farmer=f3, product_type=product_type_map.get("Tomato"), title="Red Ripe Tomatoes", price_per_kg=50.00, total_weight_kg=800.00,
+            description="Juicy vine-ripened tomatoes perfect for cooking.",
+            latitude=f3.latitude, longitude=f3.longitude, image=get_image_file("tomato.jpg"))
+        p_potato_r = Post.objects.create(
+            farmer=f3, product_type=product_type_map.get("Potato"), title="Rajshahi Potato (Diamond)", price_per_kg=30.00, total_weight_kg=2000.00,
+            description="High-yield diamond variety potatoes from Rajshahi.",
+            latitude=f3.latitude, longitude=f3.longitude, image=get_image_file("potato.jpg"))
+
+        # Farmer 4 — fselim (Jashore, 6 new products)
+        p_onion = Post.objects.create(
+            farmer=f4, product_type=product_type_map.get("Onion"), title="Jashore Red Onion", price_per_kg=45.00, total_weight_kg=1500.00,
+            description="Premium red onions from Jashore — mild & pungent.",
+            latitude=f4.latitude, longitude=f4.longitude, image=get_image_file("onion.jpg"))
+        p_garlic = Post.objects.create(
+            farmer=f4, product_type=product_type_map.get("Garlic"), title="Deshi Garlic (Jashore)", price_per_kg=120.00, total_weight_kg=400.00,
+            description="Strong-flavoured local garlic, sun-dried.",
+            latitude=f4.latitude, longitude=f4.longitude, image=get_image_file("garlic.jpg"))
+        p_ginger = Post.objects.create(
+            farmer=f4, product_type=product_type_map.get("Ginger"), title="Fresh Ginger Root", price_per_kg=90.00, total_weight_kg=300.00,
+            description="Young ginger, thin skin, strong aroma.",
+            latitude=f4.latitude, longitude=f4.longitude, image=get_image_file("ginger.jpg"))
+        p_chili = Post.objects.create(
+            farmer=f4, product_type=product_type_map.get("Green Chili"), title="Jashore Green Chili", price_per_kg=80.00, total_weight_kg=250.00,
+            description="Spicy thin-skinned green chillies.",
+            latitude=f4.latitude, longitude=f4.longitude, image=get_image_file("chili.jpg"))
+        p_cabbage = Post.objects.create(
+            farmer=f4, product_type=product_type_map.get("Cabbage"), title="Green Cabbage Large", price_per_kg=25.00, total_weight_kg=900.00,
+            description="Heavy dense green cabbages, 2-3 kg each.",
+            latitude=f4.latitude, longitude=f4.longitude, image=get_image_file("cabbage.jpg"))
+        p_cauliflower = Post.objects.create(
+            farmer=f4, product_type=product_type_map.get("Cauliflower"), title="Snow White Cauliflower", price_per_kg=40.00, total_weight_kg=600.00,
+            description="Fresh compact cauliflower heads.",
+            latitude=f4.latitude, longitude=f4.longitude, image=get_image_file("cauliflower.jpg"))
+
+        # Farmer 5 — farif (Comilla, 7 new products)
+        p_okra = Post.objects.create(
+            farmer=f5, product_type=product_type_map.get("Okra"), title="Tender Okra (Dheros)", price_per_kg=35.00, total_weight_kg=500.00,
+            description="Fresh young okra, slim & fibre-free.",
+            latitude=f5.latitude, longitude=f5.longitude, image=get_image_file("okra.jpg"))
+        p_bitter = Post.objects.create(
+            farmer=f5, product_type=product_type_map.get("Bitter Gourd"), title="Comilla Bitter Gourd", price_per_kg=50.00, total_weight_kg=350.00,
+            description="Medium-size bitter gourd, moderately bitter.",
+            latitude=f5.latitude, longitude=f5.longitude, image=get_image_file("bitter_gourd.jpg"))
+        p_bottle = Post.objects.create(
+            farmer=f5, product_type=product_type_map.get("Bottle Gourd"), title="Bottle Gourd (Lau)", price_per_kg=30.00, total_weight_kg=700.00,
+            description="Light green tender bottle gourds.",
+            latitude=f5.latitude, longitude=f5.longitude, image=get_image_file("bottle_gourd.jpg"))
+        p_pumpkin = Post.objects.create(
+            farmer=f5, product_type=product_type_map.get("Sweet Pumpkin"), title="Sweet Pumpkin (Misti Kumra)", price_per_kg=35.00, total_weight_kg=1000.00,
+            description="Deep orange sweet pumpkin, 3-5 kg pieces.",
+            latitude=f5.latitude, longitude=f5.longitude, image=get_image_file("pumpkin.jpg"))
+        p_spinach = Post.objects.create(
+            farmer=f5, product_type=product_type_map.get("Spinach"), title="Fresh Palong Shak Bunch", price_per_kg=20.00, total_weight_kg=200.00,
+            description="Locally grown spinach bunches, freshly cut.",
+            latitude=f5.latitude, longitude=f5.longitude, image=get_image_file("spinach.jpg"))
+        p_radish = Post.objects.create(
+            farmer=f5, product_type=product_type_map.get("Radish"), title="White Radish (Mula)", price_per_kg=25.00, total_weight_kg=600.00,
+            description="Long white crisp radish, mild flavour.",
+            latitude=f5.latitude, longitude=f5.longitude, image=get_image_file("radish.jpg"))
+        p_coriander = Post.objects.create(
+            farmer=f5, product_type=product_type_map.get("Coriander Leaf"), title="Dhone Pata Bunch", price_per_kg=100.00, total_weight_kg=80.00,
+            description="Fresh coriander leaves, aromatic.",
+            latitude=f5.latitude, longitude=f5.longitude, image=get_image_file("coriander.jpg"))
 
         # ==========================================
-        # 4. ORDERS for csadia
+        # 5. ORDERS for csadia
         # ==========================================
         self.stdout.write("Creating csadia orders (5 completed with fjamal, 1 shipped with fkarim)...")
 
@@ -185,7 +296,7 @@ class Command(BaseCommand):
         o7 = make_order(c1, p_cherry1, 10, 'completed')
 
         # ==========================================
-        # 5. REVIEWS for csadia (per-post)
+        # 6. REVIEWS for csadia (per-post)
         # ==========================================
         self.stdout.write("Creating reviews for csadia's completed orders...")
 
@@ -216,21 +327,74 @@ class Command(BaseCommand):
         )
 
         # ==========================================
-        # 6. chasan's pending order (existing)
+        # 7. MORE CSADIA ORDERS (from fselim & farif)
         # ==========================================
-        self.stdout.write("Creating chasan's pending order...")
-        make_order(c2, p_cucumber, 50, 'pending')
+        self.stdout.write("Creating csadia orders from new farmers...")
+        make_order(c1, p_onion, 200, 'completed')
+        make_order(c1, p_garlic, 50, 'completed')
+        make_order(c1, p_okra, 100, 'completed')
+        make_order(c1, p_pumpkin, 150, 'completed')
+        make_order(c1, p_chili, 30, 'shipped')
+
+        # csadia reviews for the completed ones from fselim/farif
+        Review.objects.create(
+            customer=c1, post=p_onion, rating=4,
+            comment="Jashore onions are top quality. Strong flavour, lasts long in storage."
+        )
+        Review.objects.create(
+            customer=c1, post=p_garlic, rating=5,
+            comment="Excellent deshi garlic. Very strong — I use half of what I'd normally use."
+        )
+        # p_okra and p_pumpkin are completed but UNREVIEWED — csadia can still review them
 
         # ==========================================
-        # 7. SUMMARY
+        # 8. chasan's orders
+        # ==========================================
+        self.stdout.write("Creating chasan orders...")
+
+        # chasan's existing pending order
+        make_order(c2, p_cucumber, 50, 'pending')
+
+        # chasan buys from farif (completed, no review yet)
+        make_order(c2, p_okra, 80, 'completed')
+        make_order(c2, p_bitter, 40, 'completed')
+        make_order(c2, p_radish, 100, 'completed')
+        make_order(c2, p_coriander, 20, 'completed')
+
+        # chasan also buys from fselim
+        make_order(c2, p_cabbage, 200, 'completed')
+        make_order(c2, p_cauliflower, 120, 'shipped')
+
+        # chasan buys from fkarim
+        make_order(c2, p_potato_r, 500, 'completed')
+
+        # chasan reviews for 2 of his completed orders
+        Review.objects.create(
+            customer=c2, post=p_okra, rating=4,
+            comment="Good quality okra, fresh and tender. Will order again."
+        )
+        Review.objects.create(
+            customer=c2, post=p_radish, rating=3,
+            comment="Radish was fresh but slightly smaller than expected. Still decent."
+        )
+        # p_bitter, p_coriander, p_cabbage, p_potato_r are completed but UNREVIEWED
+
+        # ==========================================
+        # 9. SUMMARY
         # ==========================================
         self.stdout.write(self.style.SUCCESS("Database seeded successfully!"))
-        self.stdout.write(f"  Admin:           admin / adminpassword123")
+        self.stdout.write(f"  Admin:           admin / Adminpassword123")
         self.stdout.write(f"  Farmers:         fjamal(f1), frahim(f2), fkarim(f3), fselim(f4), farif(f5)")
-        self.stdout.write(f"  Passwords:       f1, f2, f3, f4, f5")
-        self.stdout.write(f"  Customers:       csadia(c123), chasan(c23)")
+        self.stdout.write(f"  Passwords:       F1, F2, F3, F4, F5")
+        self.stdout.write(f"  Customers:       csadia(C123), chasan(C23)")
         self.stdout.write("")
         self.stdout.write("  csadia -> fjamal:  5 completed orders (4 reviewed, 1 unreviewed)")
         self.stdout.write("  csadia -> fkarim:  1 SHIPPED order — confirm & review")
         self.stdout.write("  csadia -> frahim:  1 completed order, 1 review on cherries")
-        self.stdout.write("  chasan -> frahim:  1 pending order (ship & complete to review)")
+        self.stdout.write("  csadia -> fselim:  2 completed (1 reviewed onion, 1 reviewed garlic)")
+        self.stdout.write("  csadia -> farif:   2 completed (1 unreviewed okra, 1 unreviewed pumpkin) + 1 SHIPPED chili")
+        self.stdout.write("")
+        self.stdout.write("  chasan -> frahim:  1 pending cucumber order (ship & complete to review)")
+        self.stdout.write("  chasan -> farif:   4 completed (okra reviewed, radish reviewed, 2 unreviewed bitter+coriander)")
+        self.stdout.write("  chasan -> fselim:  1 completed cabbage (unreviewed) + 1 SHIPPED cauliflower")
+        self.stdout.write("  chasan -> fkarim:  1 completed potato (unreviewed)")

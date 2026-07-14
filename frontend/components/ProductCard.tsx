@@ -19,11 +19,17 @@ export function ProductCard({ post, onPress, imageTint = Colors.lightGreen }: Pr
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
       <View style={[styles.imageArea, { backgroundColor: imageTint }]}>
-        {post.image ? (
-          <Image 
-            source={{ uri: post.image }} 
-            style={StyleSheet.absoluteFill} 
-            resizeMode="cover" 
+        {(post.images?.length ?? 0) > 0 ? (
+          <Image
+            source={{ uri: post.images[0].image }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+        ) : post.image ? (
+          <Image
+            source={{ uri: post.image }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
           />
         ) : null}
         

@@ -6,6 +6,17 @@ from django.utils import timezone
 from datetime import timedelta
 import random
 
+
+class ProductType(models.Model):
+    name_en = models.CharField(max_length=100, unique=True)
+    name_bn = models.CharField(max_length=100)
+    max_price_limit = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name_bn
+
+
 class User(AbstractUser):
     ROLE_CHOICES = (
         ('admin', 'Admin'),
@@ -40,6 +51,7 @@ class User(AbstractUser):
 
 class Post(models.Model):
     farmer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts', limit_choices_to={'role': 'farmer'})
+    product_type = models.ForeignKey(ProductType, on_delete=models.SET_NULL, null=True, blank=True, related_name='posts')
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     image_url = models.URLField(max_length=500, blank=True, null=True)
@@ -57,6 +69,12 @@ class Post(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.total_weight_kg}kg by {self.farmer.username}"
+
+
+class PostImage(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='post_images/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class Order(models.Model):

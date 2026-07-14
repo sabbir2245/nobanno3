@@ -13,12 +13,11 @@ from rest_framework.decorators import action
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 
-from .models import Post, Order, Review, OTP
+from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImage
 from .serializers import (
     UserSerializer, RegisterSerializer, PostSerializer,
-    OrderSerializer, ReviewSerializer , EmailOrPhoneAuthSerializer
-    
-    
+    OrderSerializer, ReviewSerializer, EmailOrPhoneAuthSerializer,
+    ProductTypeSerializer
 )
 from .permissions import IsFarmer, IsCustomer, IsAdminUser, IsOwnerOrReadOnly
 
@@ -137,6 +136,29 @@ class UserManagementViewSet(viewsets.ModelViewSet):
 
         return Response({"status": f"Topped up {amount} units.", "user": UserSerializer(user).data})
 
+class ProductTypeViewSet(viewsets.ModelViewSet):
+    queryset = ProductType.objects.all().order_by('name_en')
+    serializer_class = ProductTypeSerializer
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), IsAdminUser()]
+        return [permissions.AllowAny()]
+
+    @action(detail=True, methods=['patch'])
+    def set_max_price(self, request, pk=None):
+        product_type = self.get_object()
+        amount = request.data.get('max_price_limit')
+        if amount is None:
+            return Response({"error": "Provide 'max_price_limit'."}, status=400)
+        try:
+            product_type.max_price_limit = Decimal(str(amount))
+            product_type.save()
+            return Response(ProductTypeSerializer(product_type).data)
+        except:
+            return Response({"error": "Invalid amount."}, status=400)
+
+
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all().order_by('-created_at')
     serializer_class = PostSerializer
@@ -148,6 +170,16 @@ class PostViewSet(viewsets.ModelViewSet):
             return [permissions.IsAuthenticated(), IsOwnerOrReadOnly()]
         return [permissions.AllowAny()]
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        post = serializer.save(farmer=request.user)
+        images = request.FILES.getlist('uploaded_images')
+        for img in images[:3]:
+            PostImage.objects.create(post=post, image=img)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def perform_create(self, serializer):
         serializer.save(farmer=self.request.user)
 
@@ -158,6 +190,11 @@ class PostViewSet(viewsets.ModelViewSet):
         search = request.query_params.get('search')
         if search:
             queryset = queryset.filter(Q(title__icontains=search) | Q(description__icontains=search))
+
+        # Check for product_type filter
+        product_type = request.query_params.get('product_type')
+        if product_type:
+            queryset = queryset.filter(product_type_id=product_type)
 
         # Check for specific farmer filter
         farmer_id = request.query_params.get('farmer_id')
@@ -358,14 +395,32 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return [permissions.AllowAny()]
 
     def create(self, request, *args, **kwargs):
+        print(f"[DEBUG ReviewViewSet.create] User={request.user.id} POST={dict(request.POST)} FILES={len(request.FILES.getlist('uploaded_images'))}")
+
+        # Duplicate check: one review per customer per post
+        post_id = request.data.get('post')
+        if post_id:
+            existing = Review.objects.filter(customer=request.user, post_id=post_id).first()
+            if existing:
+                print(f"[DEBUG ReviewViewSet.create] Duplicate review blocked — user={request.user.id} post={post_id}")
+                return Response(
+                    {"non_field_errors": "You have already reviewed this product."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         review = serializer.save(customer=request.user)
+        print(f"[DEBUG ReviewViewSet.create] Review #{review.id} saved")
+
         images = request.FILES.getlist('uploaded_images')
-        for img in images[:3]:
-            ReviewImage.objects.create(review=review, image=img)
-        serializer = self.get_serializer(review)
+        for i, img in enumerate(images[:3]):
+            ri = ReviewImage.objects.create(review=review, image=img)
+            print(f"[DEBUG ReviewViewSet.create] ReviewImage #{ri.id} created for review #{review.id} ({img.name})")
+
+        serializer = self.get_serializer(review, context={'request': request})
         headers = self.get_success_headers(serializer.data)
+        print(f"[DEBUG ReviewViewSet.create] Response data keys: {list(serializer.data.keys())}")
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def list(self, request, *args, **kwargs):

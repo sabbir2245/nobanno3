@@ -5,7 +5,7 @@ from .views import (
     RegisterView, CustomLoginView, UserProfileView,
     UserManagementViewSet, PostViewSet, OrderViewSet,
     ReviewViewSet, FarmerWalletView, AdminAnalyticsView,
-    
+    ProductTypeViewSet,
 )
 from .update import UserUpdateView, PostUpdateView
 
@@ -14,6 +14,7 @@ router.register(r'users', UserManagementViewSet, basename='user-mgmt')
 router.register(r'posts', PostViewSet, basename='posts')
 router.register(r'orders', OrderViewSet, basename='orders')
 router.register(r'reviews', ReviewViewSet, basename='reviews')
+router.register(r'product-types', ProductTypeViewSet, basename='product-types')
 
 urlpatterns = [
     # Router endpoints

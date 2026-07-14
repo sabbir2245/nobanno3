@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -63,9 +64,13 @@ export default function FarmerAccountScreen() {
       >
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {(user?.name || user?.username || '?')[0].toUpperCase()}
-            </Text>
+            {user?.profile_picture ? (
+              <Image source={{ uri: user.profile_picture }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {(user?.name || user?.username || '?')[0].toUpperCase()}
+              </Text>
+            )}
           </View>
           <View>
             <Text style={styles.name}>{user?.name || user?.username}</Text>
@@ -147,11 +152,17 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.darkGreen,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   avatarText: {
     fontFamily: Fonts.bold,
     fontSize: 22,
     color: Colors.white,
+  },
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
   name: {
     fontFamily: Fonts.bold,

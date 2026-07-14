@@ -14,9 +14,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, ApiError } from '@/services/api';
+import { api, ApiError, ProductType } from '@/services/api';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { ProductTypePicker } from '@/components/ProductTypePicker';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -29,10 +30,20 @@ export default function EditPostScreen() {
   const [description, setDescription] = useState('');
   const [totalWeight, setTotalWeight] = useState('');
   const [pricePerKg, setPricePerKg] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [existingImage, setExistingImage] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [existingImages, setExistingImages] = useState<string[]>([]);
+  const [productTypeId, setProductTypeId] = useState<number | null>(null);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    api.getProductTypes(token ?? null).then(setProductTypes).catch(() => {});
+  }, [token]);
+
+  const selectedType = productTypes.find((pt) => pt.id === productTypeId);
+  const maxPrice = selectedType?.max_price_limit ?? null;
+  const pricePlaceholder = maxPrice ? `Max: ৳${parseFloat(maxPrice).toFixed(0)}` : 'Max: ৳999';
 
   useEffect(() => {
     if (!id || !token) return;
@@ -43,7 +54,12 @@ export default function EditPostScreen() {
         setDescription(post.description);
         setTotalWeight(post.total_weight_kg.toString());
         setPricePerKg(post.price_per_kg.toString());
-        if (post.image) setExistingImage(post.image);
+        if (post.product_type) setProductTypeId(post.product_type);
+        if (post.images && post.images.length > 0) {
+          setExistingImages(post.images.map((img) => img.image).filter(Boolean) as string[]);
+        } else if (post.image) {
+          setExistingImages([post.image]);
+        }
       } catch {
         Alert.alert('Error', 'Failed to load post.');
         router.back();
@@ -53,19 +69,24 @@ export default function EditPostScreen() {
     })();
   }, [id, token]);
 
-  const pickImage = async () => {
+  const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission denied', 'Gallery access is required to change image.');
+      Alert.alert('Permission denied');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
+      allowsMultipleSelection: true,
       quality: 0.5,
     });
     if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+      const newUris = result.assets.map((a) => a.uri);
+      setImageUris((prev) => [...prev, ...newUris].slice(0, 3));
     }
+  };
+
+  const removeImage = (index: number) => {
+    setImageUris((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSave = async () => {
@@ -81,7 +102,8 @@ export default function EditPostScreen() {
         description: description.trim(),
         total_weight_kg: parseFloat(totalWeight),
         price_per_kg: parseFloat(pricePerKg),
-        imageUri: imageUri || undefined,
+        product_type: productTypeId || undefined,
+        imageUris: imageUris.length > 0 ? imageUris : undefined,
       });
       Alert.alert('Updated', 'Your post has been updated.', [
         { text: 'OK', onPress: () => router.back() },
@@ -102,7 +124,7 @@ export default function EditPostScreen() {
     );
   }
 
-  const displayImage = imageUri || existingImage;
+  const allDisplayImages = [...imageUris, ...existingImages];
 
   return (
     <KeyboardAvoidingView
@@ -124,22 +146,38 @@ export default function EditPostScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionLabel}>Product Photo</Text>
-        <TouchableOpacity style={styles.photoBox} onPress={pickImage}>
-          {displayImage ? (
-            <Image source={{ uri: displayImage }} style={styles.previewImage} />
-          ) : (
-            <>
+        <Text style={styles.sectionLabel}>Product Photos (max 3)</Text>
+        <View style={styles.photoRow}>
+          {imageUris.map((uri, i) => (
+            <View key={`new-${i}`} style={styles.photoBox}>
+              <Image source={{ uri }} style={styles.previewImage} />
+              <TouchableOpacity style={styles.removeBtn} onPress={() => removeImage(i)}>
+                <Ionicons name="close-circle" size={22} color={Colors.darkGreen} />
+              </TouchableOpacity>
+            </View>
+          ))}
+          {existingImages.map((uri, i) => (
+            <View key={`old-${i}`} style={styles.photoBox}>
+              <Image source={{ uri }} style={styles.previewImage} />
+              <View style={styles.existingBadge}>
+                <Text style={styles.existingBadgeText}>existing</Text>
+              </View>
+            </View>
+          ))}
+          {allDisplayImages.length < 3 && (
+            <TouchableOpacity style={styles.photoBox} onPress={pickImages}>
               <Ionicons name="add" size={28} color={Colors.darkGreen} />
-              <Text style={styles.photoText}>Add Image</Text>
-            </>
+              <Text style={styles.photoText}>Add Images</Text>
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
-        {existingImage && !imageUri && (
-          <Text style={styles.hint}>Tap to change photo</Text>
-        )}
+        </View>
 
         <Text style={styles.sectionLabel}>Product Details</Text>
+        <ProductTypePicker
+          token={token}
+          selectedId={productTypeId}
+          onSelect={(type) => setProductTypeId(type ? type.id : null)}
+        />
         <InputField
           label="Title"
           value={title}
@@ -171,7 +209,7 @@ export default function EditPostScreen() {
               value={pricePerKg}
               onChangeText={setPricePerKg}
               keyboardType="decimal-pad"
-              placeholder="e.g. 50"
+              placeholder={pricePlaceholder}
             />
           </View>
         </View>
@@ -229,14 +267,19 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
     marginTop: Spacing.sm,
   },
+  photoRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+    flexWrap: 'wrap',
+  },
   photoBox: {
-    width: 120,
-    height: 120,
+    width: 100,
+    height: 100,
     backgroundColor: Colors.lightGreen,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.xs,
     overflow: 'hidden',
   },
   photoText: {
@@ -250,11 +293,26 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: Radius.md,
   },
-  hint: {
+  removeBtn: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: Colors.white,
+    borderRadius: 11,
+  },
+  existingBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingVertical: 2,
+    alignItems: 'center',
+  },
+  existingBadgeText: {
     fontFamily: Fonts.regular,
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginBottom: Spacing.sm,
+    fontSize: 9,
+    color: Colors.white,
   },
   grid: {
     flexDirection: 'row',

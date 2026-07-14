@@ -9,9 +9,11 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/services/api';
@@ -33,6 +35,19 @@ export default function UpdateProfileScreen() {
   const [locLoading, setLocLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
+
+  const pickProfilePic = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setProfilePicUri(result.assets[0].uri);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -96,14 +111,18 @@ export default function UpdateProfileScreen() {
     }
     setSaving(true);
     try {
-      await api.updateProfileInfo(token, {
+      const body: Record<string, any> = {
         name: name.trim(),
         phone_number: phoneNumber.trim(),
         address: address.trim(),
         email: email.trim(),
         latitude: latitude ?? undefined,
         longitude: longitude ?? undefined,
-      });
+      };
+      if (profilePicUri) {
+        body.profile_picture = profilePicUri;
+      }
+      await api.updateProfileInfo(token, body);
       await refreshProfile();
       Alert.alert('Updated', 'Your profile has been updated.', [
         { text: 'OK', onPress: () => router.back() },
@@ -138,6 +157,23 @@ export default function UpdateProfileScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.picPicker}>
+          <TouchableOpacity onPress={pickProfilePic}>
+            {profilePicUri ? (
+              <Image source={{ uri: profilePicUri }} style={styles.picPreview} />
+            ) : user?.profile_picture ? (
+              <Image source={{ uri: user.profile_picture }} style={styles.picPreview} />
+            ) : (
+              <View style={styles.picPlaceholder}>
+                <Ionicons name="camera" size={32} color={Colors.mediumGreen} />
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={pickProfilePic}>
+            <Text style={styles.picLabel}>Change Profile Picture</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="person-circle-outline" size={22} color={Colors.darkGreen} />
@@ -250,6 +286,34 @@ const styles = StyleSheet.create({
   content: {
     padding: Spacing.md,
     paddingBottom: Spacing.xl,
+  },
+  picPicker: {
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  picPreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: Colors.lightGreen,
+  },
+  picPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: Colors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+  },
+  picLabel: {
+    fontFamily: Fonts.medium,
+    fontSize: 14,
+    color: Colors.darkGreen,
+    marginTop: Spacing.sm,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: Colors.white,

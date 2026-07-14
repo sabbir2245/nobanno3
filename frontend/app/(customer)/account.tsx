@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Image,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -82,9 +83,13 @@ export default function CustomerAccountScreen() {
       >
         <View style={globalstyles.profileCard}>
           <View style={globalstyles.avatar}>
-            <Text style={globalstyles.avatarText}>
-              {(user?.name || user?.username || '?')[0].toUpperCase()}
-            </Text>
+            {user?.profile_picture ? (
+              <Image source={{ uri: user.profile_picture }} style={globalstyles.avatarImage} />
+            ) : (
+              <Text style={globalstyles.avatarText}>
+                {(user?.name || user?.username || '?')[0].toUpperCase()}
+              </Text>
+            )}
           </View>
           <View style={globalstyles.profileInfo}>
             <Text style={globalstyles.name}>{user?.name || user?.username}</Text>

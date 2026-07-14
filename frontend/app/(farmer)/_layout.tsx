@@ -59,6 +59,12 @@ export default function FarmerLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen
+        name="edit-post/[id]"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

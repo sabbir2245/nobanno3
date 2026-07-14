@@ -19,6 +19,21 @@ export interface User {
   avg_rating: number | null;
   ratings_count: number;
   total_sales: string | null;
+  profile_picture: string | null;
+}
+
+export interface ProductType {
+  id: number;
+  name_en: string;
+  name_bn: string;
+  max_price_limit: string | null;
+  created_at: string;
+}
+
+export interface PostImage {
+  id: number;
+  image: string | null;
+  created_at: string;
 }
 
 export interface Post {
@@ -34,6 +49,9 @@ export interface Post {
   farmer_username: string;
   farmer_avg_rating: number | null;
   farmer_ratings_count: number;
+  product_type: number | null;
+  product_type_name_bn: string | null;
+  images: PostImage[];
   total_price: number;
   distance_km?: number;
   created_at: string;
@@ -115,11 +133,9 @@ async function request<T>(
     throw new ApiError(`Network error: ${fetchErr.message}`, 0, null);
   }
 
-  console.log(`[API] RESPONSE STATUS: ${response.status} ${response.statusText}`);
-
   let data: unknown = null;
   const text = await response.text();
-  console.log(`[API] RAW RESPONSE TEXT:`, text);
+  console.log(`[API] ${response.status} ${response.statusText}`);
 
   if (text) {
     try {
@@ -180,7 +196,7 @@ export const api = {
 
   getPosts: (
     token: string | null,
-    params?: { search?: string; lat?: number; lng?: number; radius?: number; farmer_id?: number },
+    params?: { search?: string; lat?: number; lng?: number; radius?: number; farmer_id?: number; product_type?: number },
   ) => {
     const query = new URLSearchParams();
     if (params?.search) query.set('search', params.search);
@@ -188,6 +204,7 @@ export const api = {
     if (params?.lng) query.set('lng', String(params.lng));
     if (params?.radius) query.set('radius', String(params.radius));
     if (params?.farmer_id) query.set('farmer_id', String(params.farmer_id));
+    if (params?.product_type) query.set('product_type', String(params.product_type));
     const qs = query.toString();
     return request<Post[]>(`/posts/${qs ? `?${qs}` : ''}`, { method: 'GET' }, token);
   },
@@ -207,6 +224,9 @@ export const api = {
   getPost: (id: number, token?: string | null) =>
     request<Post>(`/posts/${id}/`, { method: 'GET' }, token),
 
+  getProductTypes: (token?: string | null) =>
+    request<ProductType[]>('/product-types/', { method: 'GET' }, token),
+
   createPost: async (
     token: string,
     body: {
@@ -216,10 +236,12 @@ export const api = {
       price_per_kg: number;
       latitude: number;
       longitude: number;
-      imageUri?: string;
+      product_type?: number;
+      imageUris?: string[];
     },
   ) => {
-    if (body.imageUri) {
+    const hasImages = body.imageUris && body.imageUris.length > 0;
+    if (hasImages || body.product_type) {
       const formData = new FormData();
       formData.append('title', body.title);
       formData.append('description', body.description);
@@ -227,32 +249,25 @@ export const api = {
       formData.append('price_per_kg', body.price_per_kg.toString());
       formData.append('latitude', body.latitude.toString());
       formData.append('longitude', body.longitude.toString());
-      
-      const filename = body.imageUri.split('/').pop() || 'image.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      // @ts-ignore
-      formData.append('image', {
-        uri: body.imageUri,
-        name: filename,
-        type,
-      });
+      if (body.product_type) formData.append('product_type', String(body.product_type));
+      for (const uri of (body.imageUris || []).slice(0, 3)) {
+        const filename = uri.split('/').pop() || 'image.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        // @ts-ignore
+        formData.append('uploaded_images', { uri, name: filename, type });
+      }
 
       const response = await fetch(`${API_BASE_URL}/posts/`, {
         method: 'POST',
-        headers: {
-          Authorization: `Token ${token}`,
-        },
+        headers: { Authorization: `Token ${token}` },
         body: formData,
       });
 
       if (!response.ok) {
         let errorData;
-        try {
-          errorData = await response.json();
-        } catch {
-          errorData = await response.text();
-        }
+        try { errorData = await response.json(); }
+        catch { errorData = await response.text(); }
         throw new ApiError('Failed to create post', response.status, errorData);
       }
 
@@ -302,6 +317,8 @@ export const api = {
     token: string,
     body: { post: number; rating: number; comment: string; imageUris?: string[] },
   ) => {
+    console.log(`[API createReviewWithImages] post=${body.post} rating=${body.rating} images=${body.imageUris?.length ?? 0}`);
+
     if (body.imageUris && body.imageUris.length > 0) {
       const formData = new FormData();
       formData.append('post', String(body.post));
@@ -313,20 +330,33 @@ export const api = {
         const type = match ? `image/${match[1]}` : 'image/jpeg';
         // @ts-ignore
         formData.append('uploaded_images', { uri, name: filename, type });
+        console.log(`[API createReviewWithImages] Appended image: ${filename} (${type})`);
       }
       const response = await fetch(`${API_BASE_URL}/reviews/`, {
         method: 'POST',
         headers: { Authorization: `Token ${token}` },
         body: formData,
       });
+      console.log(`[API createReviewWithImages] Response status=${response.status}`);
       if (!response.ok) {
         let errorData;
-        try { errorData = await response.json(); }
-        catch { errorData = await response.text(); }
-        throw new ApiError('Failed to create review', response.status, errorData);
+        try {
+          errorData = await response.json();
+          console.log(`[API createReviewWithImages] Error JSON:`, errorData);
+        } catch {
+          errorData = await response.text();
+          console.log(`[API createReviewWithImages] Error text:`, errorData);
+        }
+        const msg = typeof errorData === 'object' && errorData !== null
+          ? (errorData as any).non_field_errors || (errorData as any).detail || JSON.stringify(errorData)
+          : String(errorData);
+        throw new ApiError(msg, response.status, errorData);
       }
-      return response.json() as Promise<Review>;
+      const data = await response.json();
+      console.log(`[API createReviewWithImages] Success — review #${data.id}, images=${data.images?.length ?? 0}`);
+      return data as Review;
     }
+    console.log(`[API createReviewWithImages] No images, falling back to JSON createReview`);
     return api.createReview(token, { post: body.post, rating: body.rating, comment: body.comment });
   },
 
@@ -345,12 +375,15 @@ export const api = {
       recent_transactions: Order[];
     }>('/farmer/wallet/', { method: 'GET' }, token),
 
-  updateProfileInfo: (token: string, body: Partial<Pick<User, 'name' | 'phone_number' | 'address' | 'email' | 'latitude' | 'longitude'>>) =>
+  updateProfileInfo: (token: string, body: Partial<Pick<User, 'name' | 'phone_number' | 'address' | 'email' | 'latitude' | 'longitude' | 'profile_picture'>>) =>
     request<User>(
       '/profile/update/',
       { method: 'PATCH', body: JSON.stringify(body) },
       token,
     ),
+
+  deletePost: (token: string, id: number) =>
+    request<void>(`/posts/${id}/`, { method: 'DELETE' }, token),
 
   updatePost: async (
     token: string,
@@ -362,10 +395,12 @@ export const api = {
       price_per_kg?: number;
       latitude?: number;
       longitude?: number;
-      imageUri?: string;
+      product_type?: number;
+      imageUris?: string[];
     },
   ) => {
-    if (body.imageUri) {
+    const hasImages = body.imageUris && body.imageUris.length > 0;
+    if (hasImages || body.product_type) {
       const formData = new FormData();
       if (body.title) formData.append('title', body.title);
       if (body.description) formData.append('description', body.description);
@@ -373,12 +408,14 @@ export const api = {
       if (body.price_per_kg) formData.append('price_per_kg', body.price_per_kg.toString());
       if (body.latitude) formData.append('latitude', body.latitude.toString());
       if (body.longitude) formData.append('longitude', body.longitude.toString());
-
-      const filename = body.imageUri.split('/').pop() || 'image.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-      // @ts-ignore
-      formData.append('image', { uri: body.imageUri, name: filename, type });
+      if (body.product_type) formData.append('product_type', String(body.product_type));
+      for (const uri of (body.imageUris || []).slice(0, 3)) {
+        const filename = uri.split('/').pop() || 'image.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        // @ts-ignore
+        formData.append('uploaded_images', { uri, name: filename, type });
+      }
 
       const response = await fetch(`${API_BASE_URL}/posts/${id}/update/`, {
         method: 'PATCH',

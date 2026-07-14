@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,13 +13,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, ApiError } from '@/services/api';
+import { api, ApiError, ProductType } from '@/services/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { ProductTypePicker } from '@/components/ProductTypePicker';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 import * as ImagePicker from "expo-image-picker";
-//import '../localization/i18n';
 import { useTranslation } from 'react-i18next';
 
 export default function CreatePostScreen() {
@@ -29,116 +29,125 @@ export default function CreatePostScreen() {
   const [description, setDescription] = useState('');
   const [totalWeight, setTotalWeight] = useState('');
   const [pricePerKg, setPricePerKg] = useState('');
-  const [minOrder, setMinOrder] = useState('10');
   const [loading, setLoading] = useState(false);
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUris, setImageUris] = useState<string[]>([]);
+  const [productTypeId, setProductTypeId] = useState<number | null>(null);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const { t } = useTranslation();
 
-  const estimatedTotal =
-    totalWeight && pricePerKg
-      ? (parseFloat(totalWeight) * parseFloat(pricePerKg)).toFixed(0)
-      : '--';
+  useEffect(() => {
+    api.getProductTypes(token ?? null).then(setProductTypes).catch(() => {});
+  }, [token]);
 
+  const selectedType = productTypes.find((pt) => pt.id === productTypeId);
+  const maxPrice = selectedType?.max_price_limit ?? null;
+  const pricePlaceholder = maxPrice ? `Max: ৳${parseFloat(maxPrice).toFixed(0)}` : 'Max: ৳999';
 
-  const pickImage = async () => {
-
-    const { status} = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (status != 'granted') {
-      Alert.alert('permission denied ');
-      return; 
+  const pickImages = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission denied');
+      return;
     }
-    
-    let result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      quality: .5
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsMultipleSelection: true,
+      quality: 0.5,
     });
-
-    if (!result.canceled) { 
-      setImageUri(result.assets[0].uri);
+    if (!result.canceled) {
+      const newUris = result.assets.map((a) => a.uri);
+      setImageUris((prev) => [...prev, ...newUris].slice(0, 3));
     }
-    else {
-      alert("you did now select any image");
+  };
 
+  const removeImage = (index: number) => {
+    setImageUris((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const submit = async () => {
+    if (!token) return;
+    if (!title || !totalWeight || !pricePerKg) {
+      Alert.alert('Missing fields', 'Product name, quantity and price are required.');
+      return;
     }
-  }
-  
+    const lat = location?.latitude ?? user?.latitude ?? 23.81;
+    const lng = location?.longitude ?? user?.longitude ?? 90.41;
 
-    const submit = async () => {
-      if (!token) return;
-      if (!title || !totalWeight || !pricePerKg) {
-        Alert.alert('Missing fields', 'Product name, quantity and price are required.');
-        return;
-      }
-      const lat = location?.latitude ?? user?.latitude ?? 23.81;
-      const lng = location?.longitude ?? user?.longitude ?? 90.41;
+    setLoading(true);
+    try {
+      await api.createPost(token, {
+        title,
+        description,
+        total_weight_kg: parseFloat(totalWeight),
+        price_per_kg: parseFloat(pricePerKg),
+        latitude: lat,
+        longitude: lng,
+        product_type: productTypeId || undefined,
+        imageUris: imageUris.length > 0 ? imageUris : undefined,
+      });
+      Alert.alert('Listing posted', 'Your crop listing is now live.', [
+        { text: 'OK', onPress: () => router.push('/(farmer)/dashboard') },
+      ]);
+      setTitle('');
+      setDescription('');
+      setTotalWeight('');
+      setPricePerKg('');
+      setImageUris([]);
+      setProductTypeId(null);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to post listing';
+      Alert.alert('Error', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      setLoading(true);
-      try {
-        await api.createPost(token, {
-          title,
-          description,
-          total_weight_kg: parseFloat(totalWeight),
-          price_per_kg: parseFloat(pricePerKg),
-          latitude: lat,
-          longitude: lng,
-          imageUri: imageUri || undefined,
-        });
-        Alert.alert('Listing posted', 'Your crop listing is now live.', [
-          { text: 'OK', onPress: () => router.push('/(farmer)/dashboard') },
-        ]);
-        setTitle('');
-        setDescription('');
-        setTotalWeight('');
-        setPricePerKg('');
-        setImageUri(null);
-      } catch (err) {
-        const msg = err instanceof ApiError ? err.message : 'Failed to post listing';
-        Alert.alert('Error', msg);
-      } finally {
-        setLoading(false);
-      }
-    };
+  return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScreenHeader title={t('create_listing')} />
 
-    return (
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScreenHeader title={t('create_listing')} />
-          
-          <ScrollView contentContainerStyle={styles.content}>
-            <Text style={styles.sectionLabel}>{t('product_photos')}</Text>
-            <TouchableOpacity style={styles.photoBox} onPress={pickImage}>
-              {imageUri ? (
-                <Image source={{ uri: imageUri }} style={styles.previewImage} />
-              ) : (
-                <>
-                  <Ionicons name="add" size={28} color={Colors.darkGreen} />
-                  <Text style={styles.photoText}>{t('add_images')}</Text>
-                </>
-              )}
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.sectionLabel}>{t('product_photos')} (max 3)</Text>
+        <View style={styles.photoRow}>
+          {imageUris.map((uri, i) => (
+            <View key={i} style={styles.photoBox}>
+              <Image source={{ uri }} style={styles.previewImage} />
+              <TouchableOpacity style={styles.removeBtn} onPress={() => removeImage(i)}>
+                <Ionicons name="close-circle" size={22} color={Colors.darkGreen} />
+              </TouchableOpacity>
+            </View>
+          ))}
+          {imageUris.length < 3 && (
+            <TouchableOpacity style={styles.photoBox} onPress={pickImages}>
+              <Ionicons name="add" size={28} color={Colors.darkGreen} />
+              <Text style={styles.photoText}>{t('add_images')}</Text>
             </TouchableOpacity>
-    
-            <Text style={styles.sectionLabel}>{t('product_details')}</Text>
-            <InputField placeholder={t('product_name')} value={title} onChangeText={setTitle} />
-            <InputField placeholder={t('description')} value={description} onChangeText={setDescription} multiline />
-    
-            <Text style={styles.sectionLabel}>{t('quantity_price')}</Text>
-            <View style={styles.grid}>
-              <InputField placeholder={t('total_qty')} value={totalWeight} onChangeText={setTotalWeight} keyboardType="decimal-pad" />
-              <InputField placeholder={t('price_per_kg')} value={pricePerKg} onChangeText={setPricePerKg} keyboardType="decimal-pad" />
-            </View>
-    
-            <PrimaryButton title={t('post_listing')} onPress={submit} loading={loading} />
-            
-            <View style={styles.commissionNote}>
-              <Text style={styles.commissionText}>{t('commission_note')}</Text>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      );
-    
+          )}
+        </View>
 
-  
-  }
+        <Text style={styles.sectionLabel}>{t('product_details')}</Text>
+        <ProductTypePicker
+          token={token}
+          selectedId={productTypeId}
+          onSelect={(type) => setProductTypeId(type ? type.id : null)}
+        />
+        <InputField placeholder={t('product_name')} value={title} onChangeText={setTitle} />
+        <InputField placeholder={t('description')} value={description} onChangeText={setDescription} multiline />
+
+        <Text style={styles.sectionLabel}>{t('quantity_price')}</Text>
+        <View style={styles.grid}>
+          <InputField placeholder={t('total_qty')} value={totalWeight} onChangeText={setTotalWeight} keyboardType="decimal-pad" />
+          <InputField placeholder={pricePlaceholder} value={pricePerKg} onChangeText={setPricePerKg} keyboardType="decimal-pad" />
+        </View>
+
+        <PrimaryButton title={t('post_listing')} onPress={submit} loading={loading} />
+
+        <View style={styles.commissionNote}>
+          <Text style={styles.commissionText}>{t('commission_note')}</Text>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
 
   const styles = StyleSheet.create({
     flex: {
@@ -156,6 +165,12 @@ export default function CreatePostScreen() {
       marginBottom: Spacing.sm,
       marginTop: Spacing.sm,
     },
+    photoRow: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+      flexWrap: 'wrap',
+    },
     photoBox: {
       width: 100,
       height: 100,
@@ -163,7 +178,7 @@ export default function CreatePostScreen() {
       borderRadius: Radius.md,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: Spacing.md,
+      overflow: 'hidden',
     },
     photoText: {
       fontFamily: Fonts.regular,
@@ -176,68 +191,16 @@ export default function CreatePostScreen() {
       height: '100%',
       borderRadius: Radius.md,
     },
-    textArea: {
-      minHeight: 100,
-      textAlignVertical: 'top',
+    removeBtn: {
+      position: 'absolute',
+      top: -4,
+      right: -4,
+      backgroundColor: Colors.white,
+      borderRadius: 11,
     },
     grid: {
       flexDirection: 'row',
       gap: Spacing.sm,
-    },
-    gridInput: {
-      flex: 1,
-    },
-    estimateBox: {
-      flex: 1,
-      backgroundColor: '#E8E8E8',
-      borderRadius: Radius.md,
-      padding: Spacing.md,
-      justifyContent: 'center',
-      marginBottom: Spacing.md,
-    },
-    estimateLabel: {
-      fontFamily: Fonts.regular,
-      fontSize: 11,
-      color: Colors.textMuted,
-    },
-    estimateValue: {
-      fontFamily: Fonts.semiBold,
-      fontSize: 15,
-      color: Colors.textDark,
-      marginTop: 2,
-    },
-    locationBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: Colors.lightGreen,
-      borderWidth: 1,
-      borderColor: Colors.darkGreen,
-      borderRadius: Radius.md,
-      padding: Spacing.md,
-      gap: Spacing.sm,
-      marginBottom: Spacing.lg,
-    },
-    mapThumb: {
-      width: 48,
-      height: 48,
-      backgroundColor: Colors.white,
-      borderRadius: Radius.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    locationText: {
-      flex: 1,
-    },
-    locationLabel: {
-      fontFamily: Fonts.regular,
-      fontSize: 11,
-      color: Colors.textMuted,
-    },
-    locationValue: {
-      fontFamily: Fonts.regular,
-      fontSize: 13,
-      color: Colors.textDark,
-      marginTop: 2,
     },
     commissionNote: {
       flexDirection: 'row',

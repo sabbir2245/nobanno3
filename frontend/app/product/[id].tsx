@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,10 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  TextInput,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +23,10 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { ReviewCard } from '@/components/ReviewCard';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 
-const MIN_QTY = 10;
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const IMG_W = SCREEN_WIDTH - Spacing.md * 2;
+
+const MIN_QTY = 0;
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,6 +37,17 @@ export default function ProductDetailScreen() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [quantity, setQuantity] = useState(MIN_QTY);
+  const [imageIndex, setImageIndex] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const allImages: string[] = React.useMemo(() => {
+    const uris: string[] = [];
+    if (post?.images?.length) {
+      post.images.forEach((img) => { if (img.image) uris.push(img.image); });
+    }
+    if (!uris.length && post?.image) uris.push(post.image);
+    return uris;
+  }, [post]);
 
   useEffect(() => {
     if (!id) return;
@@ -77,11 +95,20 @@ export default function ProductDetailScreen() {
     if (r.rating >= 1 && r.rating <= 5) distribution[5 - r.rating]++;
   });
 
-  const adjustQty = (delta: number) => {
-    setQuantity((q) => Math.min(maxQty, Math.max(MIN_QTY, q + delta)));
+  const handleQtyChange = (text: string) => {
+    const val = parseInt(text, 10);
+    if (isNaN(val) || val < 0) {
+      setQuantity(0);
+    } else {
+      setQuantity(Math.min(val, maxQty));
+    }
   };
 
   const addToCart = () => {
+    if (quantity <= 0) {
+      Alert.alert('Invalid quantity', 'Please enter a quantity greater than 0.');
+      return;
+    }
     addItem(post, quantity);
     Alert.alert('Added to cart', `${quantity} kg of ${post.title} added.`, [
       { text: 'View Cart', onPress: () => router.push('/(customer)/cart') },
@@ -97,16 +124,57 @@ export default function ProductDetailScreen() {
       />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.gallery}>
-          {post.image ? (
-            <Image source={{ uri: post.image }} style={styles.mainImage} resizeMode="cover" />
+          {allImages.length > 0 ? (
+            <View style={styles.imageWrapper}>
+              <ScrollView
+                ref={scrollRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / IMG_W);
+                  if (idx !== imageIndex) setImageIndex(idx);
+                }}
+                scrollEventThrottle={16}
+              >
+                {allImages.map((uri, i) => (
+                  <Image key={i} source={{ uri }} style={{ width: IMG_W, height: 180 }} resizeMode="cover" />
+                ))}
+              </ScrollView>
+
+              {allImages.length > 1 && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.arrowBtn, styles.arrowLeft]}
+                    onPress={() => {
+                      const next = Math.max(0, imageIndex - 1);
+                      setImageIndex(next);
+                      scrollRef.current?.scrollTo({ x: next * IMG_W, animated: true });
+                    }}
+                  >
+                    <Ionicons name="chevron-back" size={16} color={Colors.white} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.arrowBtn, styles.arrowRight]}
+                    onPress={() => {
+                      const next = Math.min(allImages.length - 1, imageIndex + 1);
+                      setImageIndex(next);
+                      scrollRef.current?.scrollTo({ x: next * IMG_W, animated: true });
+                    }}
+                  >
+                    <Ionicons name="chevron-forward" size={16} color={Colors.white} />
+                  </TouchableOpacity>
+                  <View style={styles.dots}>
+                    {allImages.map((_, i) => (
+                      <View key={i} style={[styles.dot, i === imageIndex && styles.dotActive]} />
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
           ) : (
-            <View style={styles.mainImage} />
+            <View style={{ width: IMG_W, height: 180, backgroundColor: Colors.lightGreen, borderRadius: Radius.md }} />
           )}
-          <View style={styles.thumbRow}>
-            {[1, 2, 3].map((i) => (
-              <View key={i} style={styles.thumb} />
-            ))}
-          </View>
         </View>
 
         <View style={styles.sellerCard}>
@@ -144,39 +212,34 @@ export default function ProductDetailScreen() {
             <Text style={styles.statLabel}>Total Available:</Text>
             <Text style={styles.statValue}>{maxQty} kg</Text>
           </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Min. Order:</Text>
-            <Text style={styles.statValue}>{MIN_QTY} kg</Text>
-          </View>
         </View>
 
-        <Text style={styles.sectionLabel}>Quantity Selection</Text>
-        <View style={styles.qtyRow}>
-          <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQty(-5)}>
-            <Text style={styles.qtyBtnText}>−</Text>
-          </TouchableOpacity>
-          <View style={styles.qtyDisplay}>
-            <Text style={styles.qtyValue}>{quantity} kg</Text>
-          </View>
-          <TouchableOpacity style={styles.qtyBtn} onPress={() => adjustQty(5)}>
-            <Text style={styles.qtyBtnText}>+</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.sectionLabel}>Quantity (kg)</Text>
+        <TextInput
+          style={styles.qtyInput}
+          value={String(quantity)}
+          onChangeText={handleQtyChange}
+          keyboardType="number-pad"
+          placeholder="Enter quantity"
+          placeholderTextColor={Colors.textMuted}
+        />
 
-        <View style={styles.costBox}>
-          <View style={styles.costRow}>
-            <Text style={styles.costLabel}>Product Cost:</Text>
-            <Text style={styles.costValue}>৳ {productCost.toFixed(0)}</Text>
+        {quantity > 0 && (
+          <View style={styles.costBox}>
+            <View style={styles.costRow}>
+              <Text style={styles.costLabel}>Product Cost:</Text>
+              <Text style={styles.costValue}>৳ {productCost.toFixed(0)}</Text>
+            </View>
+            <View style={styles.costRow}>
+              <Text style={styles.costLabel}>Shipping Est.:</Text>
+              <Text style={styles.costValue}>৳ --</Text>
+            </View>
+            <View style={[styles.costRow, styles.costTotal]}>
+              <Text style={styles.costLabel}>Total Estimate:</Text>
+              <Text style={styles.costValue}>৳ {productCost.toFixed(0)} + Shipping</Text>
+            </View>
           </View>
-          <View style={styles.costRow}>
-            <Text style={styles.costLabel}>Shipping Est.:</Text>
-            <Text style={styles.costValue}>৳ --</Text>
-          </View>
-          <View style={[styles.costRow, styles.costTotal]}>
-            <Text style={styles.costLabel}>Total Estimate:</Text>
-            <Text style={styles.costValue}>৳ {productCost.toFixed(0)} + Shipping</Text>
-          </View>
-        </View>
+        )}
 
         {post.description ? <Text style={styles.description}>{post.description}</Text> : null}
 
@@ -243,9 +306,20 @@ const styles = StyleSheet.create({
   loading: { fontFamily: Fonts.regular, textAlign: 'center', marginTop: 40, color: Colors.textMuted },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl },
   gallery: { marginBottom: Spacing.md },
-  mainImage: { height: 180, backgroundColor: Colors.lightGreen, borderRadius: Radius.md, marginBottom: Spacing.sm },
-  thumbRow: { flexDirection: 'row', gap: Spacing.sm },
-  thumb: { flex: 1, height: 60, backgroundColor: Colors.cream, borderRadius: Radius.sm },
+  imageWrapper: { position: 'relative', borderRadius: Radius.md, overflow: 'hidden' },
+  arrowBtn: {
+    position: 'absolute', top: 0, bottom: 22, width: 28,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  arrowLeft: { left: 0 },
+  arrowRight: { right: 0 },
+  dots: {
+    position: 'absolute', bottom: 4, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', gap: 5,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.5)' },
+  dotActive: { backgroundColor: Colors.white, width: 8, height: 8, borderRadius: 4 },
   sellerCard: { flexDirection: 'row', backgroundColor: Colors.cream, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.md, marginBottom: Spacing.md },
   sellerAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.mediumGreen, alignItems: 'center', justifyContent: 'center' },
   sellerInfo: { flex: 1 },
@@ -260,11 +334,17 @@ const styles = StyleSheet.create({
   statLabel: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted },
   statValue: { fontFamily: Fonts.semiBold, fontSize: 13, color: Colors.textDark, marginTop: 2 },
   sectionLabel: { fontFamily: Fonts.semiBold, fontSize: 15, color: Colors.textDark, marginBottom: Spacing.sm },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md },
-  qtyBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.darkGreen, alignItems: 'center', justifyContent: 'center' },
-  qtyBtnText: { fontFamily: Fonts.bold, fontSize: 20, color: Colors.white },
-  qtyDisplay: { flex: 1, borderWidth: 1, borderColor: Colors.textDark, borderRadius: Radius.sm, padding: Spacing.sm, alignItems: 'center' },
-  qtyValue: { fontFamily: Fonts.semiBold, fontSize: 16, color: Colors.textDark },
+  qtyInput: {
+    borderWidth: 1,
+    borderColor: Colors.textDark,
+    borderRadius: Radius.sm,
+    padding: Spacing.sm,
+    fontFamily: Fonts.semiBold,
+    fontSize: 16,
+    color: Colors.textDark,
+    marginBottom: Spacing.md,
+    textAlign: 'center',
+  },
   costBox: { backgroundColor: Colors.paleGreen, borderWidth: 1, borderColor: Colors.textDark, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md },
   costRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.xs },
   costTotal: { marginTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: Spacing.sm },

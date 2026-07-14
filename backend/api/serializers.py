@@ -2,7 +2,7 @@ from decimal import Decimal
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from .models import Post, Order, Review, ReviewImage, OTP
+from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImage
 from rest_framework.validators import UniqueValidator
 
 User = get_user_model()
@@ -90,8 +90,27 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-#from rest_framework import serializers
-#from .models import Post  # Adjust import based on your app structure
+class ProductTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductType
+        fields = '__all__'
+
+
+class PostImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostImage
+        fields = ('id', 'image', 'created_at')
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        if instance.image:
+            request = self.context.get('request')
+            if request is not None:
+                rep['image'] = request.build_absolute_uri(instance.image.url)
+            else:
+                rep['image'] = f"http://192.168.1.100:8000{instance.image.url}"
+        return rep
+
 
 class PostSerializer(serializers.ModelSerializer):
     farmer_name = serializers.ReadOnlyField(source='farmer.name')
@@ -99,6 +118,9 @@ class PostSerializer(serializers.ModelSerializer):
     farmer_avg_rating = serializers.FloatField(source='farmer.average_rating', read_only=True, allow_null=True)
     farmer_ratings_count = serializers.IntegerField(source='farmer.ratings_count', read_only=True)
     total_price = serializers.SerializerMethodField()
+    product_type_name_bn = serializers.ReadOnlyField(source='product_type.name_bn', allow_null=True)
+    images = PostImageSerializer(many=True, read_only=True)
+
     class Meta:
         model = Post
         fields = '__all__'
@@ -126,6 +148,25 @@ class PostSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Price must be greater than zero.")
         return value
+
+    def validate(self, attrs):
+        product_type = attrs.get('product_type')
+        price_per_kg = attrs.get('price_per_kg')
+        if product_type and product_type.max_price_limit is not None and price_per_kg:
+            if price_per_kg > product_type.max_price_limit:
+                raise serializers.ValidationError(
+                    f"Price per kg ({price_per_kg}) exceeds the maximum limit ({product_type.max_price_limit}) for {product_type.name_bn}."
+                )
+        return attrs
+
+    def create(self, validated_data):
+        return Post.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
     
     
     
@@ -212,6 +253,18 @@ class ReviewImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReviewImage
         fields = ('id', 'image', 'image_url')
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        # Build absolute URI so React Native Image can load it
+        if instance.image:
+            request = self.context.get('request')
+            if request is not None:
+                rep['image'] = request.build_absolute_uri(instance.image.url)
+            else:
+                rep['image'] = f"http://192.168.1.100:8000{instance.image.url}"
+            print(f"[DEBUG ReviewImageSerializer] image → {rep['image']}")
+        return rep
 
 
 class ReviewSerializer(serializers.ModelSerializer):

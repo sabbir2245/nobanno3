@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Review } from '@/services/api';
@@ -9,6 +9,11 @@ interface Props {
 }
 
 export function ReviewCard({ review }: Props) {
+  useEffect(() => {
+    if (review.images?.length) {
+      console.log(`[ReviewCard #${review.id}] images:`, review.images.map((i) => ({ id: i.id, image: i.image?.slice(0, 60), image_url: i.image_url?.slice(0, 60) })));
+    }
+  }, [review.id, review.images]);
   const fullStars = Math.floor(review.rating);
   const hasHalf = review.rating - fullStars >= 0.5;
   const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);

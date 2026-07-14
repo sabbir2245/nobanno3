@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
-  Image,
   ScrollView,
   Platform,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -30,26 +30,28 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
   const { token } = useAuth();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
-  const [imageUris, setImageUris] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [imageUris, setImageUris] = useState<string[]>([]);
 
-  const pickImage = async () => {
-    if (imageUris.length >= 3) {
-      Alert.alert('Limit', 'You can add up to 3 images.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-      allowsMultipleSelection: false,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setImageUris((prev) => [...prev, result.assets[0].uri].slice(0, 3));
+  const pickImages = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        const remaining = 3 - imageUris.length;
+        const newUris = result.assets.slice(0, remaining).map((a) => a.uri);
+        setImageUris((prev) => [...prev, ...newUris].slice(0, 3));
+      }
+    } catch (err) {
+      // picker cancelled or failed — silently ignore
     }
   };
 
-  const removeImage = (uri: string) => {
-    setImageUris((prev) => prev.filter((u) => u !== uri));
+  const removeImage = (idx: number) => {
+    setImageUris((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleSubmit = async () => {
@@ -62,14 +64,15 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
       return;
     }
     setSubmitting(true);
+    console.log(`[ReviewFormModal] Submitting review — post=${postId} rating=${rating} images=${imageUris.length}`);
     try {
-      const body: { post: number; rating: number; comment: string; imageUris?: string[] } = {
+      const result = await api.createReviewWithImages(token, {
         post: postId,
         rating,
         comment,
-      };
-      if (imageUris.length > 0) body.imageUris = imageUris;
-      await api.createReviewWithImages(token, body);
+        imageUris: imageUris.length > 0 ? imageUris : undefined,
+      });
+      console.log(`[ReviewFormModal] Submit success — review #${result.id}`);
       Alert.alert('Thank you!', 'Your review has been submitted.');
       setRating(0);
       setComment('');
@@ -77,7 +80,11 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
       onSuccess();
       onClose();
     } catch (err: any) {
-      Alert.alert('Failed', err.message || 'Could not submit review.');
+      const msg = err?.data
+        ? (typeof err.data === 'string' ? err.data : JSON.stringify(err.data))
+        : (err.message || 'Could not submit review.');
+      console.log(`[ReviewFormModal] Submit error — ${msg}`);
+      Alert.alert('Review Failed', msg);
     } finally {
       setSubmitting(false);
     }
@@ -119,22 +126,25 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
               textAlignVertical="top"
             />
 
-            <Text style={styles.imageLabel}>Add photos (up to 3)</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imageRow}>
-              {imageUris.map((uri) => (
-                <View key={uri} style={styles.imageWrapper}>
-                  <Image source={{ uri }} style={styles.preview} />
-                  <TouchableOpacity style={styles.removeBtn} onPress={() => removeImage(uri)}>
-                    <Ionicons name="close-circle" size={20} color={Colors.darkGreen} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {imageUris.length < 3 && (
-                <TouchableOpacity style={styles.addBtn} onPress={pickImage}>
-                  <Ionicons name="camera-outline" size={24} color={Colors.mediumGreen} />
-                </TouchableOpacity>
-              )}
-            </ScrollView>
+            <TouchableOpacity style={styles.photoBtn} onPress={pickImages}>
+              <Ionicons name="camera-outline" size={18} color={Colors.darkGreen} />
+              <Text style={styles.photoBtnText}>
+                {imageUris.length > 0 ? `${imageUris.length}/3 photos` : 'Add Photos'}
+              </Text>
+            </TouchableOpacity>
+
+            {imageUris.length > 0 && (
+              <View style={styles.photoPreviewRow}>
+                {imageUris.map((uri, i) => (
+                  <View key={i} style={styles.photoPreviewBox}>
+                    <Image source={{ uri }} style={styles.photoPreview} />
+                    <TouchableOpacity style={styles.photoRemove} onPress={() => removeImage(i)}>
+                      <Ionicons name="close-circle" size={18} color={Colors.darkGreen} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
 
             <View style={styles.actionRow}>
               <PrimaryButton
@@ -210,41 +220,25 @@ const styles = StyleSheet.create({
     minHeight: 80,
     marginBottom: Spacing.md,
   },
-  imageLabel: {
-    fontFamily: Fonts.medium,
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginBottom: Spacing.sm,
+  photoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.xs,
+    marginBottom: Spacing.sm, paddingVertical: Spacing.sm,
   },
-  imageRow: {
-    marginBottom: Spacing.lg,
+  photoBtnText: {
+    fontFamily: Fonts.medium, fontSize: 14, color: Colors.darkGreen,
   },
-  imageWrapper: {
+  photoPreviewRow: {
+    flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md,
+  },
+  photoPreviewBox: {
+    width: 72, height: 72, borderRadius: Radius.sm, overflow: 'hidden',
     position: 'relative',
-    marginRight: Spacing.sm,
   },
-  preview: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.lightGreen,
+  photoPreview: {
+    width: '100%', height: '100%', borderRadius: Radius.sm,
   },
-  removeBtn: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: Colors.white,
-    borderRadius: 10,
-  },
-  addBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: Radius.sm,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
+  photoRemove: {
+    position: 'absolute', top: -4, right: -4,
   },
   actionRow: {
     flexDirection: 'row',

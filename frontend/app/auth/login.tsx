@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -30,18 +30,6 @@ export default function LoginScreen(): React.JSX.Element {
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [showPass, setShowPass] = useState<boolean>(false);
-
-  // Force re-render on language change
-  const [, setTick] = useState(0);
-  useEffect(() => {
-    const handleLanguageChange = () => setTick((prev) => prev + 1);
-    i18n.on('languageChanged', handleLanguageChange);
-    return () => { i18n.off('languageChanged', handleLanguageChange); };
-  }, []);
-
-  const toggleLanguage = (): void => {
-    i18n.changeLanguage(i18n.language === 'en' ? 'bn' : 'en');
-  };
 
   const handleLogin = async (): Promise<void> => {
     if (!identityInput.trim() || !password) {
@@ -85,10 +73,6 @@ export default function LoginScreen(): React.JSX.Element {
       <ScrollView contentContainerStyle={authStyles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.topRow}>
           <Text style={authStyles.brand}>Nobanno</Text>
-          <TouchableOpacity style={styles.langToggle} onPress={toggleLanguage}>
-            <Ionicons name="language" size={16} color={Colors.darkGreen} style={{ marginRight: 4 }} />
-            <Text style={styles.langToggleText}>{i18n.language === 'en' ? 'বাংলা' : 'English'}</Text>
-          </TouchableOpacity>
         </View>
 
         <Text style={authStyles.title}>{t('Welcome back')}</Text>
@@ -147,21 +131,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  langToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.mediumGreen,
-  },
-  langToggleText: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 13,
-    color: Colors.darkGreen,
-  },
   subtitle: {
     fontFamily: Fonts.regular,
     fontSize: 14,
@@ -177,7 +146,7 @@ const styles = StyleSheet.create({
   eyeIconContainer: {
     position: 'absolute',
     right: 12,
-    bottom: 14,
+    bottom: 28,
     zIndex: 5,
   },
   forgot: {

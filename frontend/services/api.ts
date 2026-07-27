@@ -12,7 +12,6 @@ export interface User {
   name: string;
   phone_number: string;
   address: string;
-  balance: string;
   latitude: number | null;
   longitude: number | null;
   is_verified: boolean;
@@ -300,6 +299,13 @@ export const api = {
   completeOrder: (token: string, orderId: number) =>
     request<Order>(`/orders/${orderId}/complete/`, { method: 'POST' }, token),
 
+  createBulkOrders: (token: string, items: { post: number; quantity_kg: string }[], delivery_address: string) =>
+    request<Order[]>(
+      '/orders/bulk_create/',
+      { method: 'POST', body: JSON.stringify({ items, delivery_address }) },
+      token,
+    ),
+
   cancelOrder: (token: string, orderId: number) =>
     request<Order>(`/orders/${orderId}/cancel/`, { method: 'POST' }, token),
 
@@ -381,6 +387,22 @@ export const api = {
       { method: 'PATCH', body: JSON.stringify(body) },
       token,
     ),
+
+  initiatePayment: (token: string, amount: number) =>
+    request<{
+      payment_id: number;
+      transaction_id: string;
+      gateway_url: string;
+      amount: string;
+    }>('/payments/initiate/', { method: 'POST', body: JSON.stringify({ amount }) }, token),
+
+  getPaymentStatus: (token: string, transactionId: string) =>
+    request<{
+      transaction_id: string;
+      amount: string;
+      status: 'initiated' | 'success' | 'failed' | 'cancelled';
+      created_at: string;
+    }>(`/payments/status/${transactionId}/`, { method: 'GET' }, token),
 
   deletePost: (token: string, id: number) =>
     request<void>(`/posts/${id}/`, { method: 'DELETE' }, token),

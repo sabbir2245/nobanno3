@@ -1,5 +1,6 @@
 {
   "expo": {
+    "newArchEnabled": true,
     "name": "Nobanno",
     "slug": "nobanno",
     "version": "1.0.0",

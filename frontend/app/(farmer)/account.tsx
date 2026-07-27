@@ -21,7 +21,6 @@ export default function FarmerAccountScreen() {
   const router = useRouter();
   const { token, user, logout, refreshProfile } = useAuth();
   const [wallet, setWallet] = useState({
-    balance: '0',
     pending_payouts: '0',
     total_earnings: '0',
     total_commission_deductions: '0',
@@ -80,13 +79,6 @@ export default function FarmerAccountScreen() {
               <Text style={styles.rating}>★ {user.avg_rating} গড় রেটিং</Text>
             )}
           </View>
-        </View>
-
-        <View style={styles.walletCard}>
-          <Text style={styles.walletLabel}>ওয়ালেট ব্যালেন্স</Text>
-          <Text style={styles.walletValue}>
-            ৳ {parseFloat(wallet.balance).toFixed(2)}
-          </Text>
         </View>
 
         <View style={styles.statsGrid}>

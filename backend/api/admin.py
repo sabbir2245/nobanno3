@@ -4,15 +4,15 @@ from django.db.models import Sum, Count
 from django.shortcuts import render
 from django.urls import path
 
-from .models import User, Post, PostImage, Order, Review, ReviewImage, ProductType, OTP
+from .models import User, Post, PostImage, Order, Review, ReviewImage, ProductType, OTP, Payment
 
 
 class CustomUserAdmin(UserAdmin):
-    list_display = ('username', 'email', 'role', 'balance', 'is_verified', 'is_active')
+    list_display = ('username', 'email', 'role', 'is_verified', 'is_active')
     list_filter = ('role', 'is_verified', 'is_active')
     search_fields = ('username', 'email', 'phone_number')
     fieldsets = UserAdmin.fieldsets + (
-        ('Custom Fields', {'fields': ('role', 'name', 'phone_number', 'address', 'balance',
+        ('Custom Fields', {'fields': ('role', 'name', 'phone_number', 'address',
                                        'latitude', 'longitude', 'is_verified',
                                        'average_rating', 'ratings_count')}),
     )
@@ -62,6 +62,14 @@ class ReviewAdmin(admin.ModelAdmin):
 
 admin.site.register(ReviewImage)
 admin.site.register(OTP)
+
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ('transaction_id', 'user', 'amount', 'status', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('transaction_id', 'user__username')
+    readonly_fields = ('transaction_id', 'user', 'amount', 'gateway_response', 'created_at', 'updated_at')
+
 admin.site.register(User, CustomUserAdmin)
 
 
@@ -96,6 +104,8 @@ def admin_stats_view(request):
             'completed': Order.objects.filter(status='completed').count(),
             'cancelled': Order.objects.filter(status='cancelled').count(),
         },
+        'recent_orders': Order.objects.select_related('customer', 'post').order_by('-created_at')[:8],
+        'recent_reviews': Review.objects.select_related('customer', 'post').order_by('-created_at')[:8],
     }
     return render(request, 'admin/stats.html', context)
 
@@ -111,4 +121,4 @@ def patched_get_urls():
 
 
 admin.site.get_urls = patched_get_urls
-admin.site.index_template = 'admin/stats.html'
+# admin.site.index_template = 'admin/stats.html'

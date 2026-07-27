@@ -20,11 +20,12 @@ SECRET_KEY = 'django-insecure-r=e*)_!hg93m=x89d_=(k9*9c)uhy&5rxodfrm^#e^!c41_xj*
 DEBUG = True
 
 # Ensure your PC's local network IP matches this when testing with a real phone
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.100', '192.168.1.162', '10.174.158.253', '10.18.98.66', '10.18.98.199', '10.148.244.225', '*']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '192.168.1.100', '192.168.1.162', '10.174.158.253', '10.18.98.66', '10.18.98.199', '10.148.244.225', '10.159.4.13', 'thy-excessive-meaningful-validity.trycloudflare.com', '*']
 
 
 # Application definition
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -147,9 +148,92 @@ REST_FRAMEWORK = {
 # CORS configuration for cross-origin mobile requests
 CORS_ALLOW_ALL_ORIGINS = True
 
+# ── SSLCommerz Payment Gateway ────────────────────────────────────────────
+SSLCOMMERZ_STORE_ID = os.environ.get('SSLCOMMERZ_STORE_ID', 'testbox')
+SSLCOMMERZ_STORE_PASSWORD = os.environ.get('SSLCOMMERZ_STORE_PASSWORD', 'qwerty')
+SSLCOMMERZ_IS_SANDBOX = os.environ.get('SSLCOMMERZ_IS_SANDBOX', 'true').lower() == 'true'
+
+# Public tunnel URL for SSLCommerz IPN (set automatically by s.sh)
+CLOUDFLARE_TUNNEL_URL = os.environ.get('CLOUDFLARE_TUNNEL_URL')
+
 # Media configuration (safely defined after BASE_DIR using modern Pathlib)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'timage'
+
+# ── Jazzmin Admin Theme ──────────────────────────────────────────────
+
+JAZZMIN_SETTINGS = {
+    "site_title": "Nobanno Admin",
+    "site_header": "Nobanno",
+    "site_brand": "Nobanno",
+    "welcome_sign": "Welcome to Nobanno Admin",
+    "copyright": "Nobanno Agricultural Marketplace",
+    "search_model": ["api.User", "api.Post", "api.Order"],
+    "topmenu_links": [
+        {"name": "Dashboard", "url": "admin:stats", "permissions": ["is_staff"]},
+        {"name": "API Browser", "url": "/api/", "permissions": ["is_staff"], "new_window": True},
+    ],
+    "icons": {
+        "api.User": "fas fa-users",
+        "api.ProductType": "fas fa-tags",
+        "api.Post": "fas fa-seedling",
+        "api.PostImage": "fas fa-image",
+        "api.Order": "fas fa-truck",
+        "api.Review": "fas fa-star",
+        "api.ReviewImage": "fas fa-image",
+        "api.OTP": "fas fa-key",
+        "api.Payment": "fas fa-credit-card",
+    },
+    "order_with_respect_to": [
+        "api.User",
+        "api.ProductType",
+        "api.Post",
+        "api.Order",
+        "api.Review",
+        "api.OTP",
+    ],
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "hide_apps": [],
+    "hide_models": ["api.ReviewImage", "api.PostImage", "api.OTP"],
+    "related_modal_active": True,
+    "custom_css": None,
+    "custom_js": None,
+    "use_google_fonts_cdn": True,
+    "show_ui_builder": False,
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "navbar_small_text": False,
+    "footer_small_text": False,
+    "body_small_text": False,
+    "brand_small_text": False,
+    "brand_colour": "navbar-success",
+    "accent": "accent-success",
+    "navbar": "navbar-dark navbar-success",
+    "no_navbar_border": False,
+    "navbar_fixed": True,
+    "layout_boxed": False,
+    "footer_fixed": False,
+    "sidebar_fixed": True,
+    "sidebar": "sidebar-dark-success",
+    "sidebar_nav_small_text": False,
+    "sidebar_disable_expand": False,
+    "sidebar_nav_child_indent": True,
+    "sidebar_nav_compact_style": True,
+    "sidebar_nav_legacy_style": False,
+    "sidebar_nav_flat_style": False,
+    "theme": "flatly",
+    "default_theme_mode": "auto",
+    "button_classes": {
+        "primary": "btn-outline-primary",
+        "secondary": "btn-outline-secondary",
+        "info": "btn-info",
+        "warning": "btn-warning",
+        "danger": "btn-danger",
+        "success": "btn-success",
+    },
+}
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

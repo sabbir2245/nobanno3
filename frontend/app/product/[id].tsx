@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
   TextInput,
+  Modal,
   NativeSyntheticEvent,
   NativeScrollEvent,
   Dimensions,
@@ -38,7 +39,9 @@ export default function ProductDetailScreen() {
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [quantity, setQuantity] = useState(MIN_QTY);
   const [imageIndex, setImageIndex] = useState(0);
+  const [showPreview, setShowPreview] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+  const previewScrollRef = useRef<ScrollView>(null);
 
   const allImages: string[] = React.useMemo(() => {
     const uris: string[] = [];
@@ -138,7 +141,9 @@ export default function ProductDetailScreen() {
                 scrollEventThrottle={16}
               >
                 {allImages.map((uri, i) => (
-                  <Image key={i} source={{ uri }} style={{ width: IMG_W, height: 180 }} resizeMode="cover" />
+                  <TouchableOpacity key={i} activeOpacity={0.9} onPress={() => { setImageIndex(i); setShowPreview(true); }}>
+                    <Image source={{ uri }} style={{ width: IMG_W, height: 180 }} resizeMode="cover" />
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
 
@@ -297,6 +302,52 @@ export default function ProductDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal visible={showPreview} transparent animationType="fade" onRequestClose={() => setShowPreview(false)}>
+        <View style={styles.previewOverlay}>
+          <ScrollView ref={previewScrollRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+            onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              if (idx !== imageIndex) setImageIndex(idx);
+            }}
+            scrollEventThrottle={16} style={{ flex: 1 }}
+          >
+            {allImages.map((uri, i) => (
+              <TouchableOpacity key={i} activeOpacity={1} onPress={() => {}}>
+                <Image source={{ uri }} style={{ width: SCREEN_WIDTH, height: Dimensions.get('window').height * 0.6 }} resizeMode="contain" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {allImages.length > 1 && (
+            <>
+              {imageIndex > 0 && (
+                <TouchableOpacity style={styles.previewArrowLeft} onPress={() => {
+                  const next = imageIndex - 1;
+                  setImageIndex(next);
+                  previewScrollRef.current?.scrollTo({ x: next * SCREEN_WIDTH, animated: true });
+                }}>
+                  <Ionicons name="chevron-back-circle" size={40} color={Colors.white} />
+                </TouchableOpacity>
+              )}
+              {imageIndex < allImages.length - 1 && (
+                <TouchableOpacity style={styles.previewArrowRight} onPress={() => {
+                  const next = imageIndex + 1;
+                  setImageIndex(next);
+                  previewScrollRef.current?.scrollTo({ x: next * SCREEN_WIDTH, animated: true });
+                }}>
+                  <Ionicons name="chevron-forward-circle" size={40} color={Colors.white} />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+          <View style={styles.previewCounter}>
+            <Text style={styles.previewCounterText}>{imageIndex + 1} / {allImages.length}</Text>
+          </View>
+          <TouchableOpacity style={styles.previewClose} onPress={() => setShowPreview(false)}>
+            <Ionicons name="close-circle" size={32} color={Colors.white} />
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -377,4 +428,10 @@ const styles = StyleSheet.create({
   barFill: { height: 6, backgroundColor: Colors.starGold, borderRadius: 3 },
   barCount: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted, width: 20, textAlign: 'right' },
   emptyReviews: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.md },
+  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  previewArrowLeft: { position: 'absolute', left: 10, top: '50%', marginTop: -20 },
+  previewArrowRight: { position: 'absolute', right: 10, top: '50%', marginTop: -20 },
+  previewCounter: { position: 'absolute', bottom: 40, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 4 },
+  previewCounterText: { fontFamily: Fonts.medium, fontSize: 14, color: Colors.white },
+  previewClose: { position: 'absolute', top: 50, right: 20 },
 });

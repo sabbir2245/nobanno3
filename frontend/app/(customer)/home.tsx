@@ -16,7 +16,7 @@ import { api, Post, ProductType } from '@/services/api';
 import { ProductCard } from '@/components/ProductCard';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 
-const SORT_OPTIONS = ['Nearest', 'Price: Low', 'Price: High', 'Stock'];
+const SORT_OPTIONS = ['Nearest', 'Price: Low', 'Price: High', 'Stock', 'Rating'];
 const imageTints = [Colors.lightGreen, '#FFE4C4', Colors.paleYellow, Colors.sageGreen];
 
 export default function CustomerHomeScreen() {
@@ -85,6 +85,9 @@ export default function CustomerHomeScreen() {
     }
     if (sortBy === 'Price: High') {
       return parseFloat(b.price_per_kg) - parseFloat(a.price_per_kg);
+    }
+    if (sortBy === 'Rating') {
+      return (b.farmer_avg_rating ?? 0) - (a.farmer_avg_rating ?? 0);
     }
     return parseFloat(b.total_weight_kg) - parseFloat(a.total_weight_kg);
   });

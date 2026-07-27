@@ -6,44 +6,43 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
-import { api, ApiError } from '@/services/api';
+
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 
 export default function CartScreen() {
   const router = useRouter();
-  const { token, user, refreshProfile } = useAuth();
+  const { user } = useAuth();
   const { items, removeItem, clear } = useCart();
-  const [loading, setLoading] = useState<number | null>(null);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [address, setAddress] = useState(user?.address || '');
 
   const total = items.reduce(
     (sum, item) => sum + item.quantityKg * parseFloat(item.post.price_per_kg),
     0,
   );
 
-  const placeOrder = async (postId: number, qty: number, title: string) => {
-    if (!token || !user) return;
-    setLoading(postId);
-    try {
-      await api.createOrder(token, {
-        post: postId,
-        quantity_kg: qty.toFixed(2),
-        delivery_address: user.address || 'Delivery address not set',
-      });
-      removeItem(postId);
-      await refreshProfile();
-      Alert.alert('Order placed', `${title} — ${qty} kg ordered successfully.`);
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Order failed';
-      Alert.alert('Order failed', msg);
-    } finally {
-      setLoading(null);
+  const handlePlaceOrder = () => {
+    if (items.length === 0) return;
+    setAddress(user?.address || '');
+    setShowAddressModal(true);
+  };
+
+  const proceedToPayment = () => {
+    if (!user) return;
+    if (!address.trim()) {
+      Alert.alert('Address required', 'Please enter a delivery address.');
+      return;
     }
+    setShowAddressModal(false);
+    router.push({ pathname: '/(customer)/payment', params: { address: address.trim() } });
   };
 
   return (
@@ -77,22 +76,10 @@ export default function CartScreen() {
                     {item.quantityKg} kg @ ৳{' '}
                     {parseFloat(item.post.price_per_kg).toFixed(0)}/kg
                   </Text>
-                  <Text style={styles.lineTotal}>
-                    ৳ {lineTotal.toFixed(0)}
-                  </Text>
-                  <View style={styles.actions}>
-                    <PrimaryButton
-                      title="Place Order"
-                      onPress={() =>
-                        placeOrder(item.post.id, item.quantityKg, item.post.title)
-                      }
-                      loading={loading === item.post.id}
-                      style={styles.orderBtn}
-                    />
-                    <TouchableOpacity onPress={() => removeItem(item.post.id)}>
-                      <Text style={styles.remove}>Remove</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <Text style={styles.lineTotal}>৳ {lineTotal.toFixed(0)}</Text>
+                  <TouchableOpacity onPress={() => removeItem(item.post.id)}>
+                    <Text style={styles.remove}>Remove</Text>
+                  </TouchableOpacity>
                 </View>
               );
             })}
@@ -100,100 +87,71 @@ export default function CartScreen() {
               <Text style={styles.totalLabel}>Cart Total</Text>
               <Text style={styles.totalValue}>৳ {total.toFixed(0)}</Text>
             </View>
+            <PrimaryButton
+              title="Place Order"
+              onPress={handlePlaceOrder}
+              style={styles.checkoutBtn}
+            />
             <PrimaryButton title="Clear Cart" onPress={clear} variant="secondary" />
           </>
         )}
       </ScrollView>
+
+      <Modal visible={showAddressModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Delivery Address</Text>
+            <TextInput
+              style={styles.addressInput}
+              value={address}
+              onChangeText={setAddress}
+              placeholder="Enter your delivery address"
+              placeholderTextColor={Colors.textMuted}
+              multiline
+            />
+            <View style={styles.modalActions}>
+              <PrimaryButton
+                title="Cancel"
+                onPress={() => setShowAddressModal(false)}
+                variant="secondary"
+                style={{ flex: 1 }}
+              />
+              <PrimaryButton
+                title="Proceed to Payment"
+                onPress={proceedToPayment}
+                style={{ flex: 1 }}
+              />
+            </View>
+            <Text style={styles.paymentNote}>
+              Payment auto-approved for demo.
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.paleGreen,
-  },
-  content: {
-    padding: Spacing.md,
-    paddingBottom: Spacing.xl,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingTop: 60,
-  },
-  emptyTitle: {
-    fontFamily: Fonts.bold,
-    fontSize: 20,
-    color: Colors.textDark,
-  },
-  emptyText: {
-    fontFamily: Fonts.regular,
-    fontSize: 14,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginTop: Spacing.sm,
-  },
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  title: {
-    fontFamily: Fonts.bold,
-    fontSize: 17,
-    color: Colors.darkGreen,
-  },
-  farmer: {
-    fontFamily: Fonts.regular,
-    fontSize: 13,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  detail: {
-    fontFamily: Fonts.regular,
-    fontSize: 14,
-    color: Colors.textDark,
-    marginTop: Spacing.sm,
-  },
-  lineTotal: {
-    fontFamily: Fonts.bold,
-    fontSize: 18,
-    color: Colors.darkGreen,
-    marginTop: Spacing.xs,
-  },
-  actions: {
-    marginTop: Spacing.md,
-    gap: Spacing.sm,
-  },
-  orderBtn: {
-    width: '100%',
-  },
-  remove: {
-    fontFamily: Fonts.medium,
-    fontSize: 13,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    textDecorationLine: 'underline',
-  },
-  totalBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.cream,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  totalLabel: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 16,
-    color: Colors.textDark,
-  },
-  totalValue: {
-    fontFamily: Fonts.bold,
-    fontSize: 18,
-    color: Colors.darkGreen,
-  },
+  container: { flex: 1, backgroundColor: Colors.paleGreen },
+  content: { padding: Spacing.md, paddingBottom: Spacing.xl },
+  empty: { alignItems: 'center', paddingTop: 60 },
+  emptyTitle: { fontFamily: Fonts.bold, fontSize: 20, color: Colors.textDark },
+  emptyText: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.sm },
+  card: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.md, marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  title: { fontFamily: Fonts.bold, fontSize: 17, color: Colors.darkGreen },
+  farmer: { fontFamily: Fonts.regular, fontSize: 13, color: Colors.textMuted, marginTop: 2 },
+  detail: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textDark, marginTop: Spacing.sm },
+  lineTotal: { fontFamily: Fonts.bold, fontSize: 18, color: Colors.darkGreen, marginTop: Spacing.xs },
+  remove: { fontFamily: Fonts.medium, fontSize: 13, color: Colors.textMuted, textDecorationLine: 'underline', marginTop: Spacing.sm },
+  totalBox: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: Colors.cream, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md },
+  totalLabel: { fontFamily: Fonts.semiBold, fontSize: 16, color: Colors.textDark },
+  totalValue: { fontFamily: Fonts.bold, fontSize: 18, color: Colors.darkGreen },
+  checkoutBtn: { marginBottom: Spacing.md },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: Spacing.md },
+  modalContent: { backgroundColor: Colors.white, borderRadius: Radius.lg, padding: Spacing.lg, width: '100%', maxWidth: 400 },
+  modalTitle: { fontFamily: Fonts.bold, fontSize: 18, color: Colors.textDark, marginBottom: Spacing.md },
+  addressInput: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textDark, backgroundColor: Colors.paleGreen, borderRadius: Radius.md, padding: Spacing.md, minHeight: 80, textAlignVertical: 'top', marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.border },
+  modalActions: { flexDirection: 'row', gap: Spacing.sm },
+  paymentNote: { fontFamily: Fonts.regular, fontSize: 12, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.sm, fontStyle: 'italic' },
 });

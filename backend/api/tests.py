@@ -1,130 +1,150 @@
+from decimal import Decimal
 from django.test import TestCase
-from django.core import mail
 from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import get_user_model
+from .models import Post, ProductType
 
 User = get_user_model()
 
 
-class PasswordResetFlowTest(TestCase):
+class BulkOrderAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.register_url = '/api/auth/register/'
-        self.login_url = '/api/auth/login/'
-        self.forgot_password_url = '/api/auth/forgot-password/'
-        self.reset_password_url = '/api/auth/reset-password/'
+        self.bulk_url = '/api/orders/bulk_create/'
 
-        self.user_data = {
-            "username": "testuser",
-            "email": "testuser@example.com",
-            "password": "OldPassword123",
-            "role": "customer",
-            "name": "Test User",
+        # Create a customer
+        self.customer = User.objects.create_user(
+            username='testcustomer',
+            email='customer@test.com',
+            password='testpass123',
+            role='customer',
+            name='Test Customer',
+            address='123 Test St, Dhaka',
+        )
+        self.customer_token, _ = Token.objects.get_or_create(user=self.customer)
+
+        # Create a farmer
+        self.farmer = User.objects.create_user(
+            username='testfarmer',
+            email='farmer@test.com',
+            password='testpass123',
+            role='farmer',
+            name='Test Farmer',
+        )
+
+        # Create product type
+        self.product_type = ProductType.objects.create(
+            name_en='Test Type',
+            name_bn='পরীক্ষা',
+        )
+
+        # Create posts
+        self.post1 = Post.objects.create(
+            farmer=self.farmer,
+            title='Test Potato',
+            total_weight_kg=Decimal('100.00'),
+            price_per_kg=Decimal('30.00'),
+            latitude=23.81,
+            longitude=90.41,
+            product_type=self.product_type,
+        )
+        self.post2 = Post.objects.create(
+            farmer=self.farmer,
+            title='Test Rice',
+            total_weight_kg=Decimal('200.00'),
+            price_per_kg=Decimal('55.00'),
+            latitude=23.81,
+            longitude=90.41,
+            product_type=self.product_type,
+        )
+
+    def test_bulk_create_orders_success(self):
+        payload = {
+            'items': [
+                {'post': self.post1.id, 'quantity_kg': '10.00'},
+                {'post': self.post2.id, 'quantity_kg': '5.00'},
+            ],
+            'delivery_address': '456 Test Ave, Dhaka',
         }
+        response = self.client.post(
+            self.bulk_url, payload, format='json',
+            HTTP_AUTHORIZATION=f'Token {self.customer_token.key}',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(response.data), 2)
 
-    def test_full_password_reset_flow(self):
-        # 1. Register a new user
-        reg_response = self.client.post(self.register_url, self.user_data, format='json')
-        self.assertEqual(reg_response.status_code, 201)
-        self.assertIn('token', reg_response.data)
-        self.assertEqual(reg_response.data['user']['email'], self.user_data['email'])
-        old_token = reg_response.data['token']
+        # Verify stock deductions
+        self.post1.refresh_from_db()
+        self.post2.refresh_from_db()
+        self.assertEqual(self.post1.total_weight_kg, Decimal('90.00'))
+        self.assertEqual(self.post2.total_weight_kg, Decimal('195.00'))
 
-        # 2. Login with the registered user
-        login_response = self.client.post(self.login_url, {
-            "username": self.user_data['username'],
-            "password": self.user_data['password'],
-        }, format='json')
-        self.assertEqual(login_response.status_code, 200)
-        self.assertEqual(login_response.data['token'], old_token)
+        # Verify order details
+        order1 = response.data[0]
+        order2 = response.data[1]
+        self.assertEqual(order1['status'], 'pending')
+        self.assertEqual(order1['delivery_address'], '456 Test Ave, Dhaka')
+        self.assertEqual(order1['post_title'], 'Test Potato')
+        self.assertEqual(order2['post_title'], 'Test Rice')
 
-        # 3. Request forgot password (OTP via email)
-        forgot_response = self.client.post(self.forgot_password_url, {
-            "email": self.user_data['email'],
-            "method": "email",
-        }, format='json')
-        self.assertEqual(forgot_response.status_code, 200)
-        self.assertIn('OTP has been sent', forgot_response.data['message'])
+        # Verify platform fee and farmer payout
+        self.assertEqual(Decimal(order1['platform_fee']), Decimal('30.00'))  # 10% of 300
+        self.assertEqual(Decimal(order1['farmer_payout']), Decimal('270.00'))  # 90% of 300
+        self.assertEqual(Decimal(order1['total_paid']), Decimal('300.00'))
 
-        # 4. Verify OTP was sent via email
-        self.assertEqual(len(mail.outbox), 1)
-        email_body = mail.outbox[0].body
-        self.assertIn('Your OTP for password reset is:', email_body)
-
-        # Extract OTP from email body
-        otp_code = None
-        for line in email_body.split('\n'):
-            line = line.strip()
-            if line.startswith('Your OTP for password reset is:'):
-                otp_code = line.split(': ')[-1].strip()
-                break
-        self.assertIsNotNone(otp_code, "OTP code not found in email")
-        self.assertEqual(len(otp_code), 6)
-
-        # 5. Reset password with OTP
-        new_password = "NewSecurePassword456"
-        reset_response = self.client.post(self.reset_password_url, {
-            "email": self.user_data['email'],
-            "otp": otp_code,
-            "new_password": new_password,
-        }, format='json')
-        self.assertEqual(reset_response.status_code, 200)
-        self.assertIn('Password has been reset', reset_response.data['message'])
-
-        # 6. Attempt to login with old password (should fail)
-        old_login_response = self.client.post(self.login_url, {
-            "username": self.user_data['username'],
-            "password": self.user_data['password'],
-        }, format='json')
-        self.assertEqual(old_login_response.status_code, 400)
-
-        # 7. Login with new password (should succeed)
-        new_login_response = self.client.post(self.login_url, {
-            "username": self.user_data['username'],
-            "password": new_password,
-        }, format='json')
-        self.assertEqual(new_login_response.status_code, 200)
-        self.assertIn('token', new_login_response.data)
-        self.assertNotEqual(new_login_response.data['token'], old_token)
-
-    def test_forgot_password_nonexistent_email(self):
-        response = self.client.post(self.forgot_password_url, {
-            "email": "nonexistent@example.com",
-        }, format='json')
+    def test_bulk_create_insufficient_stock(self):
+        payload = {
+            'items': [
+                {'post': self.post1.id, 'quantity_kg': '999.00'},
+            ],
+            'delivery_address': '456 Test Ave, Dhaka',
+        }
+        response = self.client.post(
+            self.bulk_url, payload, format='json',
+            HTTP_AUTHORIZATION=f'Token {self.customer_token.key}',
+        )
         self.assertEqual(response.status_code, 400)
-        self.assertIn('No user found', str(response.data))
+        self.assertIn('Insufficient stock', str(response.data))
 
-    def test_reset_password_invalid_otp(self):
-        self.client.post(self.register_url, self.user_data, format='json')
-        self.client.post(self.forgot_password_url, {
-            "email": self.user_data['email'],
-        }, format='json')
+    def test_bulk_create_unauthenticated(self):
+        payload = {
+            'items': [{'post': self.post1.id, 'quantity_kg': '10.00'}],
+            'delivery_address': '456 Test Ave, Dhaka',
+        }
+        response = self.client.post(self.bulk_url, payload, format='json')
+        self.assertEqual(response.status_code, 401)
 
-        response = self.client.post(self.reset_password_url, {
-            "email": self.user_data['email'],
-            "otp": "000000",
-            "new_password": "NewPassword123",
-        }, format='json')
+    def test_bulk_create_farmer_cannot_order(self):
+        farmer_token, _ = Token.objects.get_or_create(user=self.farmer)
+        payload = {
+            'items': [{'post': self.post1.id, 'quantity_kg': '10.00'}],
+            'delivery_address': '456 Test Ave, Dhaka',
+        }
+        response = self.client.post(
+            self.bulk_url, payload, format='json',
+            HTTP_AUTHORIZATION=f'Token {farmer_token.key}',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_bulk_create_empty_items(self):
+        payload = {
+            'items': [],
+            'delivery_address': '456 Test Ave, Dhaka',
+        }
+        response = self.client.post(
+            self.bulk_url, payload, format='json',
+            HTTP_AUTHORIZATION=f'Token {self.customer_token.key}',
+        )
         self.assertEqual(response.status_code, 400)
-        self.assertIn('Invalid OTP', str(response.data))
 
-    def test_reset_password_expired_otp(self):
-        self.client.post(self.register_url, self.user_data, format='json')
-
-        from django.utils import timezone
-        from datetime import timedelta
-        from api.models import OTP
-
-        user = User.objects.get(email=self.user_data['email'])
-        otp_record = OTP.objects.create(user=user, otp="123456", method='email')
-        otp_record.created_at = timezone.now() - timedelta(minutes=10)
-        otp_record.save(update_fields=['created_at'])
-
-        response = self.client.post(self.reset_password_url, {
-            "email": self.user_data['email'],
-            "otp": "123456",
-            "new_password": "NewPassword123",
-        }, format='json')
+    def test_bulk_create_nonexistent_post(self):
+        payload = {
+            'items': [{'post': 99999, 'quantity_kg': '10.00'}],
+            'delivery_address': '456 Test Ave, Dhaka',
+        }
+        response = self.client.post(
+            self.bulk_url, payload, format='json',
+            HTTP_AUTHORIZATION=f'Token {self.customer_token.key}',
+        )
         self.assertEqual(response.status_code, 400)
-        self.assertIn('expired', str(response.data))

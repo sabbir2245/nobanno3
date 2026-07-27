@@ -68,16 +68,30 @@ class Command(BaseCommand):
             username="csadia", email="sadia@restaurant.com",             password="C123",
             role="customer", name="Sadia's Kitchen", phone_number="01912345678",
             address="Road 11, Banani, Dhaka", latitude=23.7937, longitude=90.4066,
-            balance=100000.00, is_verified=True
+            is_verified=True
         )
         c2 = User.objects.create_user(
             username="chasan", email="hasan@retail.com",             password="C23",
             role="customer", name="Hasan Groceries", phone_number="01512345678",
             address="Sector 4, Uttara, Dhaka", latitude=23.8759, longitude=90.3795,
-            balance=35000.00, is_verified=True
+            is_verified=True
         )
         for c in [c1, c2]:
             Token.objects.create(user=c)
+
+        # 2 Deliverymen
+        d1 = User.objects.create_user(
+            username="dkarim", email="karim@delivery.com", password="D1",
+            role="deliveryman", name="Karim Delivery", phone_number="01600000001",
+            address="Mirpur, Dhaka", latitude=23.8223, longitude=90.3654, is_verified=True
+        )
+        d2 = User.objects.create_user(
+            username="drahim", email="rahim@delivery.com", password="D2",
+            role="deliveryman", name="Rahim Delivery", phone_number="01600000002",
+            address="Uttara, Dhaka", latitude=23.8759, longitude=90.3795, is_verified=True
+        )
+        for d in [d1, d2]:
+            Token.objects.create(user=d)
 
         # ==========================================
         # 2. PRODUCT TYPES
@@ -268,14 +282,8 @@ class Command(BaseCommand):
                 total = round(qty * post.price_per_kg, 2)
                 fee = round(total * 0.10, 2)
                 payout = total - fee
-                customer.balance -= total
-                customer.save()
                 post.total_weight_kg -= qty
                 post.save()
-                farmer = post.farmer
-                if status == 'completed':
-                    farmer.balance += payout
-                    farmer.save()
                 return Order.objects.create(
                     customer=customer, post=post, quantity_kg=qty, status=status,
                     total_paid=total, platform_fee=fee, farmer_payout=payout,
@@ -387,6 +395,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Farmers:         fjamal(f1), frahim(f2), fkarim(f3), fselim(f4), farif(f5)")
         self.stdout.write(f"  Passwords:       F1, F2, F3, F4, F5")
         self.stdout.write(f"  Customers:       csadia(C123), chasan(C23)")
+        self.stdout.write(f"  Deliverymen:     dkarim(D1), drahim(D2)")
         self.stdout.write("")
         self.stdout.write("  csadia -> fjamal:  5 completed orders (4 reviewed, 1 unreviewed)")
         self.stdout.write("  csadia -> fkarim:  1 SHIPPED order — confirm & review")

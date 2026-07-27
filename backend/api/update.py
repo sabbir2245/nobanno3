@@ -10,7 +10,7 @@ from .models import User, Post
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        # Excludes sensitive fields like balance, role, and is_verified
+        # Excludes sensitive fields like role and is_verified
         fields = ['name', 'phone_number', 'address', 'email', 'latitude', 'longitude']
         
     def validate_email(self, value):

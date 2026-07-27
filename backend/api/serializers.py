@@ -2,7 +2,7 @@ from decimal import Decimal
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImage
+from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImage, Payment
 from rest_framework.validators import UniqueValidator
 
 User = get_user_model()
@@ -23,11 +23,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'username', 'email', 'role', 'name', 
-            'phone_number', 'address', 'balance', 
+            'phone_number', 'address', 
             'latitude', 'longitude', 'is_verified',
             'avg_rating', 'ratings_count', 'total_sales'
         )
-        read_only_fields = ('balance', 'is_verified', 'avg_rating', 'ratings_count', 'total_sales')
+        read_only_fields = ('is_verified', 'avg_rating', 'ratings_count', 'total_sales')
 
 # In your serializers.py
 class EmailOrPhoneAuthSerializer(serializers.Serializer):
@@ -74,8 +74,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
     def validate_role(self, value):
-        if value not in ['farmer', 'customer']:
-            raise serializers.ValidationError("Role must be 'farmer' or 'customer'.")
+        if value not in ['farmer', 'customer', 'deliveryman']:
+            raise serializers.ValidationError("Role must be 'farmer', 'customer', or 'deliveryman'.")
         return value
 
     def create(self, validated_data):
@@ -169,23 +169,86 @@ class PostSerializer(serializers.ModelSerializer):
         return instance
     
     
-    
+        
+class BulkOrderItemSerializer(serializers.Serializer):
+    post = serializers.PrimaryKeyRelatedField(queryset=Post.objects.all())
+    quantity_kg = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+class BulkOrderSerializer(serializers.Serializer):
+    items = BulkOrderItemSerializer(many=True)
+    delivery_address = serializers.CharField()
+
+    def validate(self, attrs):
+        items = attrs['items']
+        if not items:
+            raise serializers.ValidationError("At least one item is required.")
+
+        for item in items:
+            post = item['post']
+            qty = item['quantity_kg']
+            if qty <= 0:
+                raise serializers.ValidationError({"items": f"Quantity must be > 0 for {post.title}."})
+            if qty > post.total_weight_kg:
+                raise serializers.ValidationError({"items": f"Insufficient stock for {post.title}. Only {post.total_weight_kg}kg available."})
+        return attrs
+
+    def create(self, validated_data):
+        items = validated_data['items']
+        delivery_address = validated_data['delivery_address']
+        customer = self.context['request'].user
+
+        with transaction.atomic():
+            orders = []
+            for item in items:
+                post = Post.objects.select_for_update().get(pk=item['post'].pk)
+                qty = item['quantity_kg']
+
+                if post.total_weight_kg < qty:
+                    raise serializers.ValidationError(
+                        {"items": f"Insufficient stock for {post.title}. Only {post.total_weight_kg}kg available."}
+                    )
+
+                total_paid = round(qty * post.price_per_kg, 2)
+
+                post.total_weight_kg -= qty
+                post.save()
+
+                platform_fee = round(total_paid * Decimal('0.10'), 2)
+                farmer_payout = total_paid - platform_fee
+
+                order = Order.objects.create(
+                    customer=customer,
+                    post=post,
+                    quantity_kg=qty,
+                    total_paid=total_paid,
+                    platform_fee=platform_fee,
+                    farmer_payout=farmer_payout,
+                    delivery_address=delivery_address,
+                    status='pending'
+                )
+                orders.append(order)
+            return orders
+
+
 class OrderSerializer(serializers.ModelSerializer):
     customer_username = serializers.ReadOnlyField(source='customer.username')
     customer_name = serializers.ReadOnlyField(source='customer.name')
     post_title = serializers.ReadOnlyField(source='post.title')
     post_farmer_name = serializers.ReadOnlyField(source='post.farmer.name')
     post_farmer_id = serializers.ReadOnlyField(source='post.farmer.id')
+    deliveryman_name = serializers.ReadOnlyField(source='deliveryman.name', allow_null=True)
+    deliveryman_username = serializers.ReadOnlyField(source='deliveryman.username', allow_null=True)
+    deliveryman_phone = serializers.ReadOnlyField(source='deliveryman.phone_number', allow_null=True)
 
     class Meta:
         model = Order
         fields = '__all__'
-        read_only_fields = ('customer', 'total_paid', 'platform_fee', 'farmer_payout', 'status')
+        read_only_fields = ('customer', 'deliveryman', 'total_paid', 'platform_fee', 'farmer_payout', 'status', 'picked_up_at', 'delivered_at')
 
     def validate(self, attrs):
         post = attrs.get('post')
         quantity_kg = attrs.get('quantity_kg')
-        customer = self.context['request'].user
 
         if quantity_kg <= 0:
             raise serializers.ValidationError({"quantity_kg": "Quantity must be greater than zero."})
@@ -193,12 +256,6 @@ class OrderSerializer(serializers.ModelSerializer):
         if post.total_weight_kg < quantity_kg:
             raise serializers.ValidationError(
                 {"quantity_kg": f"Insufficient stock. Only {post.total_weight_kg}kg available."}
-            )
-
-        total_paid = quantity_kg * post.price_per_kg
-        if customer.balance < total_paid:
-            raise serializers.ValidationError(
-                {"non_field_errors": f"Insufficient balance. Total cost is {total_paid}, but your balance is {customer.balance}."}
             )
 
         return attrs
@@ -209,7 +266,6 @@ class OrderSerializer(serializers.ModelSerializer):
         quantity_kg = validated_data['quantity_kg']
 
         with transaction.atomic():
-            # select_for_update to lock the post row
             post = Post.objects.select_for_update().get(pk=post.pk)
             
             if post.total_weight_kg < quantity_kg:
@@ -218,17 +274,6 @@ class OrderSerializer(serializers.ModelSerializer):
                 )
 
             total_paid = round(quantity_kg * post.price_per_kg, 2)
-            
-            # lock customer user row to verify balance
-            customer = User.objects.select_for_update().get(pk=customer.pk)
-            if customer.balance < total_paid:
-                raise serializers.ValidationError(
-                    {"non_field_errors": f"Insufficient balance. Total cost is {total_paid}, but your balance is {customer.balance}."}
-                )
-
-            # Deduct balance & stock
-            customer.balance -= total_paid
-            customer.save()
 
             post.total_weight_kg -= quantity_kg
             post.save()
@@ -301,4 +346,11 @@ class ReviewSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = '__all__'
+        read_only_fields = ('user', 'transaction_id', 'status', 'gateway_response')
 

@@ -24,6 +24,11 @@ class IsAdminUser(permissions.BasePermission):
         return request.user and request.user.is_authenticated and (request.user.role == 'admin' or request.user.is_staff)
 
 
+class IsDeliveryman(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated and request.user.role == 'deliveryman'
+
+
 class IsOwnerOrReadOnly(permissions.BasePermission):
     """
     Object-level permission to only allow owners of an object to edit it.

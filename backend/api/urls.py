@@ -8,6 +8,10 @@ from .views import (
     ProductTypeViewSet,
 )
 from .update import UserUpdateView, PostUpdateView
+from .payments import (
+    PaymentInitiateView, PaymentSuccessView, PaymentFailView,
+    PaymentCancelView, PaymentIPNView, PaymentStatusView,
+)
 
 router = DefaultRouter()
 router.register(r'users', UserManagementViewSet, basename='user-mgmt')
@@ -35,5 +39,12 @@ urlpatterns = [
 
     path('profile/update/', UserUpdateView.as_view(), name='profile-update'),
     path('posts/<int:pk>/update/', PostUpdateView.as_view(), name='post-update'),
-    
+
+    # SSLCommerz payments
+    path('payments/initiate/', PaymentInitiateView.as_view(), name='payment-initiate'),
+    path('payments/sslcommerz/success/', PaymentSuccessView.as_view(), name='payment-success'),
+    path('payments/sslcommerz/fail/', PaymentFailView.as_view(), name='payment-fail'),
+    path('payments/sslcommerz/cancel/', PaymentCancelView.as_view(), name='payment-cancel'),
+    path('payments/sslcommerz/ipn/', PaymentIPNView.as_view(), name='payment-ipn'),
+    path('payments/status/<str:transaction_id>/', PaymentStatusView.as_view(), name='payment-status'),
 ]

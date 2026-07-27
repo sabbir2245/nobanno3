@@ -278,6 +278,68 @@ Optional: upload up to 3 images via `multipart/form-data` with `uploaded_images`
 
 ---
 
+## Payments (SSLCommerz)
+
+### POST `/api/payments/initiate/`
+Initiate an SSLCommerz payment session.
+- **Auth:** Customer token required
+
+**Request body:**
+```json
+{
+  "amount": 1000
+}
+```
+
+**Response `200`:**
+```json
+{
+  "payment_id": 1,
+  "transaction_id": "NOB-3-20250727-A1B2C3",
+  "gateway_url": "https://sandbox.sslcommerz.com/gwprocess/v4/abc123",
+  "amount": "1000.00"
+}
+```
+
+**Errors:** `400` — missing/invalid amount, `502` — SSLCommerz gateway failure.
+
+### POST `/api/payments/sslcommerz/ipn/`
+Instant Payment Notification webhook (called by SSLCommerz servers).
+- **Auth:** None (public), CSRF exempt
+- **Body:** SSLCommerz POST data (`tran_id`, `val_id`, `status`, ...)
+- **Response:** Plain text — `"Payment validated and credited"` on success
+
+### POST `/api/payments/sslcommerz/success/`
+Success redirect callback (user's browser lands here after payment).
+- **Auth:** None (public), CSRF exempt
+- **Response:** `{ "status": "success", "message": "Payment successful.", "transaction_id": "..." }`
+
+### POST `/api/payments/sslcommerz/fail/`
+Fail redirect callback.
+- **Auth:** None (public), CSRF exempt
+- **Response:** `{ "status": "failed", "message": "Payment failed.", "transaction_id": "..." }`
+
+### POST `/api/payments/sslcommerz/cancel/`
+Cancel redirect callback.
+- **Auth:** None (public), CSRF exempt
+- **Response:** `{ "status": "cancelled", "message": "Payment cancelled.", "transaction_id": "..." }`
+
+### GET `/api/payments/status/<transaction_id>/`
+Check payment status.
+- **Auth:** Customer token required (only own payments)
+- **Response:**
+```json
+{
+  "transaction_id": "NOB-3-20250727-A1B2C3",
+  "amount": "1000.00",
+  "status": "initiated | success | failed | cancelled",
+  "created_at": "2026-07-27T10:00:00Z"
+}
+```
+**Errors:** `404` — not found / not owned by user.
+
+---
+
 ## Admin Dashboard
 
 ### GET `/api/admin/analytics/`
@@ -319,28 +381,33 @@ Optional: upload up to 3 images via `multipart/form-data` with `uploaded_images`
 | 9 | POST | `/api/users/{id}/verify/` | Admin | Verify user |
 | 10 | POST | `/api/users/{id}/suspend/` | Admin | Suspend user |
 | 11 | POST | `/api/users/{id}/activate/` | Admin | Activate user |
-| 12 | POST | `/api/users/{id}/topup/` | Admin | Top up balance |
-| 13 | GET | `/api/posts/` | Public | List posts |
-| 14 | GET | `/api/posts/{id}/` | Public | Get post |
-| 15 | POST | `/api/posts/` | Farmer | Create post |
-| 16 | PATCH | `/api/posts/{id}/` | Owner | Update post |
-| 17 | DELETE | `/api/posts/{id}/` | Owner | Delete post |
-| 18 | GET | `/api/posts/search_by_keyword/` | Public | Search posts |
-| 19 | PATCH | `/api/posts/{id}/update/` | Owner | Update post w/ image |
-| 20 | GET | `/api/orders/` | Token | List orders |
-| 21 | POST | `/api/orders/` | Customer | Create order |
-| 22 | GET | `/api/orders/{id}/` | Token | Get order |
-| 23 | POST | `/api/orders/{id}/ship/` | Farmer | Ship order |
-| 24 | POST | `/api/orders/{id}/complete/` | Customer/Admin | Complete order |
-| 25 | POST | `/api/orders/{id}/cancel/` | Token | Cancel order |
-| 26 | GET | `/api/reviews/` | Public | List reviews |
-| 27 | POST | `/api/reviews/` | Customer | Create review |
-| 28 | PATCH | `/api/reviews/{id}/` | Owner | Update review |
-| 29 | DELETE | `/api/reviews/{id}/` | Owner | Delete review |
-| 30 | GET | `/api/farmer/wallet/` | Farmer | Wallet dashboard |
-| 31 | GET | `/api/admin/analytics/` | Admin | Analytics dashboard |
-| 32 | PATCH | `/api/profile/update/` | Token | Update profile fields |
-| 33 | POST | `/admin/` | Staff | Django admin panel |
+| 12 | GET | `/api/posts/` | Public | List posts |
+| 13 | GET | `/api/posts/{id}/` | Public | Get post |
+| 14 | POST | `/api/posts/` | Farmer | Create post |
+| 15 | PATCH | `/api/posts/{id}/` | Owner | Update post |
+| 16 | DELETE | `/api/posts/{id}/` | Owner | Delete post |
+| 17 | GET | `/api/posts/search_by_keyword/` | Public | Search posts |
+| 18 | PATCH | `/api/posts/{id}/update/` | Owner | Update post w/ image |
+| 19 | GET | `/api/orders/` | Token | List orders |
+| 20 | POST | `/api/orders/` | Customer | Create order |
+| 21 | GET | `/api/orders/{id}/` | Token | Get order |
+| 22 | POST | `/api/orders/{id}/ship/` | Farmer | Ship order |
+| 23 | POST | `/api/orders/{id}/complete/` | Customer/Admin | Complete order |
+| 24 | POST | `/api/orders/{id}/cancel/` | Token | Cancel order |
+| 25 | GET | `/api/reviews/` | Public | List reviews |
+| 26 | POST | `/api/reviews/` | Customer | Create review |
+| 27 | PATCH | `/api/reviews/{id}/` | Owner | Update review |
+| 28 | DELETE | `/api/reviews/{id}/` | Owner | Delete review |
+| 29 | GET | `/api/farmer/wallet/` | Farmer | Wallet dashboard |
+| 30 | GET | `/api/admin/analytics/` | Admin | Analytics dashboard |
+| 31 | PATCH | `/api/profile/update/` | Token | Update profile fields |
+| 32 | POST | `/api/payments/initiate/` | Customer | Initiate SSLCommerz payment |
+| 33 | POST | `/api/payments/sslcommerz/ipn/` | Public | IPN webhook |
+| 34 | POST | `/api/payments/sslcommerz/success/` | Public | Success callback |
+| 35 | POST | `/api/payments/sslcommerz/fail/` | Public | Fail callback |
+| 36 | POST | `/api/payments/sslcommerz/cancel/` | Public | Cancel callback |
+| 37 | GET | `/api/payments/status/<id>/` | Token | Payment status |
+| 38 | POST | `/admin/` | Staff | Django admin panel |
 
 ---
 

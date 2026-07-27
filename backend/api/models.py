@@ -22,12 +22,12 @@ class User(AbstractUser):
         ('admin', 'Admin'),
         ('farmer', 'Farmer'),
         ('customer', 'Customer'),
+        ('deliveryman', 'Deliveryman'),
     )
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='customer')
+    role = models.CharField(max_length=12, choices=ROLE_CHOICES, default='customer')
     name = models.CharField(max_length=255, blank=True)
     phone_number = models.CharField(max_length=15, blank=True, null=True,)
     address = models.TextField(blank=True, null=True)
-    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     email = models.EmailField(unique=True)
     latitude = models.FloatField(blank=True, null=True)
     longitude = models.FloatField(blank=True, null=True)
@@ -81,17 +81,22 @@ class Order(models.Model):
     STATUS_CHOICES = (
         ('pending', 'Pending'),
         ('shipped', 'Shipped'),
+        ('assigned', 'Assigned'),
+        ('out_for_delivery', 'Out for Delivery'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
     )
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders', limit_choices_to={'role': 'customer'})
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='orders')
+    deliveryman = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='deliveries')
     quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     total_paid = models.DecimalField(max_digits=10, decimal_places=2)
     platform_fee = models.DecimalField(max_digits=10, decimal_places=2)  # 10%
     farmer_payout = models.DecimalField(max_digits=10, decimal_places=2)  # 90%
     delivery_address = models.TextField()
+    picked_up_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -136,3 +141,22 @@ class OTP(models.Model):
 
     def __str__(self):
         return f"OTP {self.otp} for {self.user.username} ({self.method})"
+
+
+class Payment(models.Model):
+    STATUS_CHOICES = (
+        ('initiated', 'Initiated'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    transaction_id = models.CharField(max_length=100, unique=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='initiated')
+    gateway_response = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Payment {self.transaction_id} - {self.status} ({self.amount} BDT)"

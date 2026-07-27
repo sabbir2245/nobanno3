@@ -6,6 +6,7 @@ from django.db.models import Sum, Q
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import viewsets, permissions, status, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -17,9 +18,9 @@ from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImag
 from .serializers import (
     UserSerializer, RegisterSerializer, PostSerializer,
     OrderSerializer, ReviewSerializer, EmailOrPhoneAuthSerializer,
-    ProductTypeSerializer
+    ProductTypeSerializer, BulkOrderSerializer
 )
-from .permissions import IsFarmer, IsCustomer, IsAdminUser, IsOwnerOrReadOnly
+from .permissions import IsFarmer, IsCustomer, IsAdminUser, IsDeliveryman, IsOwnerOrReadOnly
 
 User = get_user_model()
 
@@ -89,7 +90,7 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 class UserManagementViewSet(viewsets.ModelViewSet):
     """
-    Admin-only viewset to manage users (suspend, ban, verify, top up balance).
+    Admin-only viewset to manage users (suspend, ban, verify).
     """
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -115,26 +116,6 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         user.is_active = True
         user.save()
         return Response({"status": f"User {user.username} has been activated."})
-
-    @action(detail=True, methods=['post'])
-    def topup(self, request, pk=None):
-        user = self.get_object()
-        amount = request.data.get('amount')
-        if not amount:
-            return Response({"error": "Please provide an 'amount' to top up."}, status=400)
-        try:
-            amount_dec = float(amount)
-            if amount_dec <= 0:
-                raise ValueError()
-        except ValueError:
-            return Response({"error": "Amount must be a positive number."}, status=400)
-
-        with transaction.atomic():
-            user = User.objects.select_for_update().get(pk=user.pk)
-            user.balance += Decimal(str(amount_dec))
-            user.save()
-
-        return Response({"status": f"Topped up {amount} units.", "user": UserSerializer(user).data})
 
 class ProductTypeViewSet(viewsets.ModelViewSet):
     queryset = ProductType.objects.all().order_by('name_en')
@@ -296,7 +277,11 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
 
     def get_permissions(self):
-        if self.action in ['create']:
+        if self.action in ['accept', 'pickup', 'deliver', 'available']:
+            return [permissions.IsAuthenticated(), IsDeliveryman()]
+        if self.action in ['ship']:
+            return [permissions.IsAuthenticated(), IsFarmer()]
+        if self.action in ['create', 'bulk_create']:
             return [permissions.IsAuthenticated(), IsCustomer()]
         return [permissions.IsAuthenticated()]
 
@@ -306,49 +291,126 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Order.objects.all().order_by('-created_at')
         elif user.role == 'farmer':
             return Order.objects.filter(post__farmer=user).order_by('-created_at')
+        elif user.role == 'deliveryman':
+            return Order.objects.filter(deliveryman=user).order_by('-created_at')
         else:  # customer
             return Order.objects.filter(customer=user).order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save()
 
-    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated, IsFarmer])
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request, pk=None):
+        serializer = BulkOrderSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        orders = serializer.save()
+        response_serializer = OrderSerializer(orders, many=True, context={'request': request})
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
     def ship(self, request, pk=None):
-        order = self.get_object()
+        order = Order.objects.get(pk=pk)
+        self.check_object_permissions(request, order)
         if order.status != 'pending':
             return Response({"error": f"Cannot ship order in '{order.status}' status. Must be 'pending'."}, status=400)
-        
         order.status = 'shipped'
         order.save()
         return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        try:
+            order = Order.objects.get(pk=pk)
+        except Order.DoesNotExist:
+            return Response({"error": "Order not found."}, status=404)
+        if order.status != 'shipped':
+            return Response({"error": f"Cannot accept order in '{order.status}' status. Must be 'shipped'."}, status=400)
+        if order.deliveryman is not None:
+            return Response({"error": "This order is already assigned to a deliveryman."}, status=400)
+        order.deliveryman = request.user
+        order.status = 'assigned'
+        order.save()
+        return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=['post'])
+    def pickup(self, request, pk=None):
+        try:
+            order = Order.objects.get(pk=pk)
+        except Order.DoesNotExist:
+            return Response({"error": "Order not found."}, status=404)
+        if order.deliveryman != request.user:
+            return Response({"error": "This order is not assigned to you."}, status=403)
+        if order.status != 'assigned':
+            return Response({"error": f"Cannot pick up order in '{order.status}' status. Must be 'assigned'."}, status=400)
+        order.status = 'out_for_delivery'
+        order.picked_up_at = timezone.now()
+        order.save()
+        return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=['post'])
+    def deliver(self, request, pk=None):
+        try:
+            order = Order.objects.get(pk=pk)
+        except Order.DoesNotExist:
+            return Response({"error": "Order not found."}, status=404)
+        if order.deliveryman != request.user:
+            return Response({"error": "This order is not assigned to you."}, status=403)
+        if order.status != 'out_for_delivery':
+            return Response({"error": f"Cannot deliver order in '{order.status}' status. Must be 'out_for_delivery'."}, status=400)
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            order.status = 'completed'
+            order.delivered_at = timezone.now()
+            order.save()
+        return Response(OrderSerializer(order).data)
+
+    @action(detail=False, methods=['get'])
+    def available(self, request):
+        lat = request.query_params.get('lat')
+        lng = request.query_params.get('lng')
+        radius = request.query_params.get('radius', 20)
+        queryset = Order.objects.filter(status='shipped', deliveryman__isnull=True).select_related('post')
+        if lat and lng:
+            try:
+                lat = float(lat)
+                lng = float(lng)
+                radius = float(radius)
+                lat_range = radius / 111.0
+                lng_range = radius / (111.0 * math.cos(math.radians(lat)))
+                queryset = queryset.filter(
+                    post__latitude__range=(lat - lat_range, lat + lat_range),
+                    post__longitude__range=(lng - lng_range, lng + lng_range)
+                )
+            except ValueError:
+                return Response({"error": "Invalid coordinates."}, status=400)
+        serializer = OrderSerializer(queryset, many=True, context={'request': request})
+        data = serializer.data
+        if lat and lng:
+            for item in data:
+                item_lat = float(Order.objects.get(id=item['id']).post.latitude)
+                item_lng = float(Order.objects.get(id=item['id']).post.longitude)
+                item['distance_km'] = calculate_haversine(lat, lng, item_lat, item_lng)
+            data.sort(key=lambda x: x['distance_km'])
+        return Response(data)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def complete(self, request, pk=None):
         order = self.get_object()
         user = request.user
-        
-        # Customer of the order or Admin can complete it
+
         if user.role != 'admin' and not user.is_staff and order.customer != user:
             return Response({"error": "You do not have permission to complete this order."}, status=403)
 
-        if order.status not in ['pending', 'shipped']:
+        if order.status not in ['pending', 'shipped', 'assigned', 'out_for_delivery']:
             return Response({"error": f"Cannot complete order in '{order.status}' status."}, status=400)
 
         with transaction.atomic():
-            # Refresh order and lock row
             order = Order.objects.select_for_update().get(pk=order.pk)
             if order.status == 'completed':
                 return Response(OrderSerializer(order).data)
-            
             order.status = 'completed'
+            order.delivered_at = timezone.now()
             order.save()
-
-            # Payout goes to farmer's balance
-            farmer = order.post.farmer
-            farmer = User.objects.select_for_update().get(pk=farmer.pk)
-            farmer.balance += order.farmer_payout
-            farmer.save()
-
         return Response(OrderSerializer(order).data)
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
@@ -356,7 +418,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         user = request.user
 
-        # Customer or Farmer or Admin can cancel
         if user.role != 'admin' and not user.is_staff and order.customer != user and order.post.farmer != user:
             return Response({"error": "You do not have permission to cancel this order."}, status=403)
 
@@ -367,19 +428,10 @@ class OrderViewSet(viewsets.ModelViewSet):
             order = Order.objects.select_for_update().get(pk=order.pk)
             order.status = 'cancelled'
             order.save()
-
-            # Refund customer
-            customer = order.customer
-            customer = User.objects.select_for_update().get(pk=customer.pk)
-            customer.balance += order.total_paid
-            customer.save()
-
-            # Restore crop inventory weight
             post = order.post
             post = Post.objects.select_for_update().get(pk=post.pk)
             post.total_weight_kg += order.quantity_kg
             post.save()
-
         return Response(OrderSerializer(order).data)
 
 
@@ -468,7 +520,6 @@ class FarmerWalletView(APIView):
         recent_orders_serialized = OrderSerializer(recent_orders, many=True).data
 
         return Response({
-            "balance": farmer.balance,
             "pending_payouts": pending_payouts,
             "total_earnings": total_earnings,
             "total_commission_deductions": total_commission,

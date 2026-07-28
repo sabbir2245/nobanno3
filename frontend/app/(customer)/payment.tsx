@@ -21,10 +21,11 @@ export default function PaymentScreen() {
   const { token, refreshProfile } = useAuth();
   const { items, clear } = useCart();
   const [loading, setLoading] = useState(false);
-  const [sslLoading, setSslLoading] = useState(false);
+  const [bkashLoading, setBkashLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<{
     transaction_id: string;
-    gateway_url: string;
+    bkash_url: string;
+    payment_id_bkash: string;
   } | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -62,28 +63,34 @@ export default function PaymentScreen() {
     }
   };
 
-  const payViaSSLCommerz = async () => {
+  const payViaBkash = async () => {
     if (!token) return;
-    setSslLoading(true);
+    setBkashLoading(true);
     try {
-      const result = await api.initiatePayment(token, total);
+      console.log('[PAYMENT] Initiating bKash payment for total:', total);
+      const result = await api.initiateBkashPayment(token, total);
+      console.log('[PAYMENT] bKash initiate response:', JSON.stringify(result));
+
       setPaymentResult({
         transaction_id: result.transaction_id,
-        gateway_url: result.gateway_url,
+        bkash_url: result.bkash_url,
+        payment_id_bkash: result.payment_id_bkash,
       });
 
-      const supported = await Linking.canOpenURL(result.gateway_url);
+      const supported = await Linking.canOpenURL(result.bkash_url);
       if (supported) {
-        await Linking.openURL(result.gateway_url);
+        console.log('[PAYMENT] Opening bKash URL:', result.bkash_url);
+        await Linking.openURL(result.bkash_url);
         startPolling(result.transaction_id);
       } else {
-        Alert.alert('Error', 'Cannot open payment gateway.');
+        Alert.alert('Error', 'Cannot open bKash payment gateway.');
       }
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Payment initiation failed';
+      const msg = err instanceof ApiError ? err.message : 'bKash payment initiation failed';
+      console.log('[PAYMENT] bKash initiation error:', msg);
       Alert.alert('Payment failed', msg);
     } finally {
-      setSslLoading(false);
+      setBkashLoading(false);
     }
   };
 
@@ -92,14 +99,15 @@ export default function PaymentScreen() {
     pollingRef.current = setInterval(async () => {
       if (!token) return;
       try {
-        const status = await api.getPaymentStatus(token, transactionId);
+        const status = await api.getBkashPaymentStatus(token, transactionId);
+        console.log('[PAYMENT] Polling status:', status.status);
         if (status.status === 'success') {
           if (pollingRef.current) clearInterval(pollingRef.current);
-          Alert.alert('Payment received', 'Your payment was successful. Placing your order now.');
+          Alert.alert('Payment received', 'Your bKash payment was successful. Placing your order now.');
           await placeOrders();
         } else if (status.status === 'failed' || status.status === 'cancelled') {
           if (pollingRef.current) clearInterval(pollingRef.current);
-          Alert.alert('Payment failed', 'The payment was not completed. Please try again.');
+          Alert.alert('Payment failed', 'The bKash payment was not completed. Please try again.');
           setPaymentResult(null);
         }
       } catch {
@@ -110,12 +118,13 @@ export default function PaymentScreen() {
 
   const checkPaymentManually = async () => {
     if (!token || !paymentResult) return;
-    setSslLoading(true);
+    setBkashLoading(true);
     try {
-      const status = await api.getPaymentStatus(token, paymentResult.transaction_id);
+      const status = await api.getBkashPaymentStatus(token, paymentResult.transaction_id);
+      console.log('[PAYMENT] Manual check status:', status.status);
       if (status.status === 'success') {
         if (pollingRef.current) clearInterval(pollingRef.current);
-        Alert.alert('Payment received', 'Your payment was successful. Placing your order now.');
+        Alert.alert('Payment received', 'Your bKash payment was successful. Placing your order now.');
         await placeOrders();
       } else if (status.status === 'failed' || status.status === 'cancelled') {
         Alert.alert('Payment not completed', 'Please try paying again.');
@@ -127,7 +136,7 @@ export default function PaymentScreen() {
       const msg = err instanceof ApiError ? err.message : 'Status check failed';
       Alert.alert('Error', msg);
     } finally {
-      setSslLoading(false);
+      setBkashLoading(false);
     }
   };
 
@@ -183,26 +192,26 @@ export default function PaymentScreen() {
         </View>
 
         <View style={styles.paymentOptions}>
-          <Text style={styles.paymentOptionsTitle}>Payment</Text>
+          <Text style={styles.paymentOptionsTitle}>Payment via bKash</Text>
 
           {!paymentResult ? (
             <PrimaryButton
-              title="Pay via SSLCommerz"
-              onPress={payViaSSLCommerz}
-              loading={sslLoading}
+              title="Pay with bKash"
+              onPress={payViaBkash}
+              loading={bkashLoading}
               variant="sage"
               style={styles.payBtn}
             />
           ) : (
             <>
               <Text style={styles.paymentPendingText}>
-                Payment page opened in your browser.{'\n'}
-                Complete the payment there, then return here.
+                bKash payment page opened in your browser.{'\n'}
+                Complete the payment there using your bKash wallet, then return here.
               </Text>
               <PrimaryButton
                 title="I've Completed Payment — Check Status"
                 onPress={checkPaymentManually}
-                loading={sslLoading}
+                loading={bkashLoading}
                 variant="sage"
                 style={styles.payBtn}
               />

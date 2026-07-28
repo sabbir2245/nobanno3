@@ -110,6 +110,13 @@ export default function FarmerAccountScreen() {
         />
 
         <PrimaryButton
+          title="Set Location"
+          onPress={() => router.push('/(farmer)/set-location')}
+          variant="sage"
+          style={{ marginTop: Spacing.md }}
+        />
+
+        <PrimaryButton
           title={t("লগআউট")}
           onPress={handleLogout}
           variant="secondary"

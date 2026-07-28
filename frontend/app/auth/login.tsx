@@ -49,6 +49,8 @@ export default function LoginScreen(): React.JSX.Element {
         router.replace('/(farmer)/dashboard');
       } else if (loggedInUser?.role === 'customer') {
         router.replace('/(customer)/home');
+      } else if (loggedInUser?.role === 'deliveryman') {
+        router.replace('/(deliveryman)/dashboard');
       } else {
         console.log(`[LOGIN] Unknown role: "${loggedInUser?.role}"`);
         throw new Error(t('Unknown user role'));

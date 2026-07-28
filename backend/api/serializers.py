@@ -2,7 +2,7 @@ from decimal import Decimal
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImage, Payment
+from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImage, Payment, FarmerBankAccount, BangladeshLocation
 from rest_framework.validators import UniqueValidator
 
 User = get_user_model()
@@ -11,7 +11,8 @@ class UserSerializer(serializers.ModelSerializer):
     avg_rating = serializers.FloatField(source='average_rating', read_only=True, allow_null=True)
     total_sales = serializers.ReadOnlyField()
     ratings_count = serializers.IntegerField(read_only=True)
-    
+    service_areas = serializers.JSONField(read_only=True, allow_null=True)
+
     email = serializers.EmailField(
         validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this email already exists.")]
     )
@@ -22,14 +23,14 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id', 'username', 'email', 'role', 'name', 
-            'phone_number', 'address', 
+            'id', 'username', 'email', 'role', 'name',
+            'phone_number', 'address',
             'latitude', 'longitude', 'is_verified',
-            'avg_rating', 'ratings_count', 'total_sales'
+            'avg_rating', 'ratings_count', 'total_sales',
+            'service_areas',
         )
-        read_only_fields = ('is_verified', 'avg_rating', 'ratings_count', 'total_sales')
+        read_only_fields = ('is_verified', 'avg_rating', 'ratings_count', 'total_sales', 'service_areas')
 
-# In your serializers.py
 class EmailOrPhoneAuthSerializer(serializers.Serializer):
     email_or_phone = serializers.CharField()
     password = serializers.CharField(write_only=True)
@@ -39,8 +40,6 @@ class EmailOrPhoneAuthSerializer(serializers.Serializer):
         password = attrs.get('password')
 
         if identifier and password:
-            # We pass 'identifier' to Django's username parameter. 
-            # Our custom EmailOrPhoneBackend will intercept it.
             from django.contrib.auth import authenticate
             user = authenticate(request=self.context.get('request'),
                                 username=identifier, password=password)
@@ -52,24 +51,23 @@ class EmailOrPhoneAuthSerializer(serializers.Serializer):
 
         attrs['user'] = user
         return attrs
-    
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
-    
-    # CRITICAL: Enforce uniqueness during registration so the API handles duplicates gracefully (400 Bad Request)
+
     email = serializers.EmailField(
-        required=True, # Make it required if it's a primary login option
+        required=True,
         validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this email already exists.")]
     )
     phone_number = serializers.CharField(
-        required=True, # Make it required if it's a primary login option
+        required=True,
         validators=[UniqueValidator(queryset=User.objects.all(), message="A user with this phone number already exists.")]
     )
 
     class Meta:
         model = User
         fields = (
-            'username', 'email', 'password', 'role', 'name', 
+            'username', 'email', 'password', 'role', 'name',
             'phone_number', 'address', 'latitude', 'longitude'
         )
 
@@ -79,10 +77,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        # Extract the password separately because create_user handles hashing automatically
         password = validated_data.pop('password')
-        
-        # Cleaner approach: Pass the remaining dictionary data directly into create_user
         user = User.objects.create_user(
             password=password,
             **validated_data
@@ -115,6 +110,7 @@ class PostImageSerializer(serializers.ModelSerializer):
 class PostSerializer(serializers.ModelSerializer):
     farmer_name = serializers.ReadOnlyField(source='farmer.name')
     farmer_username = serializers.ReadOnlyField(source='farmer.username')
+    farmer_phone = serializers.ReadOnlyField(source='farmer.phone_number')
     farmer_avg_rating = serializers.FloatField(source='farmer.average_rating', read_only=True, allow_null=True)
     farmer_ratings_count = serializers.IntegerField(source='farmer.ratings_count', read_only=True)
     total_price = serializers.SerializerMethodField()
@@ -125,7 +121,7 @@ class PostSerializer(serializers.ModelSerializer):
         model = Post
         fields = '__all__'
         read_only_fields = ('farmer',)
-        
+
     def get_total_price(self, obj):
         return obj.total_price
 
@@ -167,9 +163,9 @@ class PostSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
-    
-    
-        
+
+
+
 class BulkOrderItemSerializer(serializers.Serializer):
     post = serializers.PrimaryKeyRelatedField(queryset=Post.objects.all())
     quantity_kg = serializers.DecimalField(max_digits=10, decimal_places=2)
@@ -234,9 +230,18 @@ class BulkOrderSerializer(serializers.Serializer):
 class OrderSerializer(serializers.ModelSerializer):
     customer_username = serializers.ReadOnlyField(source='customer.username')
     customer_name = serializers.ReadOnlyField(source='customer.name')
+    customer_phone = serializers.ReadOnlyField(source='customer.phone_number')
     post_title = serializers.ReadOnlyField(source='post.title')
     post_farmer_name = serializers.ReadOnlyField(source='post.farmer.name')
     post_farmer_id = serializers.ReadOnlyField(source='post.farmer.id')
+    post_farmer_phone = serializers.ReadOnlyField(source='post.farmer.phone_number')
+    post_collection_district = serializers.ReadOnlyField(source='post.collection_district')
+    post_collection_upazila = serializers.ReadOnlyField(source='post.collection_upazila')
+    post_collection_union = serializers.ReadOnlyField(source='post.collection_union')
+    post_collection_ward = serializers.ReadOnlyField(source='post.collection_ward')
+    post_collection_point_address = serializers.ReadOnlyField(source='post.collection_point_address')
+    post_latitude = serializers.ReadOnlyField(source='post.latitude')
+    post_longitude = serializers.ReadOnlyField(source='post.longitude')
     deliveryman_name = serializers.ReadOnlyField(source='deliveryman.name', allow_null=True)
     deliveryman_username = serializers.ReadOnlyField(source='deliveryman.username', allow_null=True)
     deliveryman_phone = serializers.ReadOnlyField(source='deliveryman.phone_number', allow_null=True)
@@ -244,7 +249,8 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
-        read_only_fields = ('customer', 'deliveryman', 'total_paid', 'platform_fee', 'farmer_payout', 'status', 'picked_up_at', 'delivered_at')
+        read_only_fields = ('customer', 'deliveryman', 'total_paid', 'platform_fee', 'farmer_payout', 'status', 'picked_up_at', 'delivered_at',
+                           'bkash_payment_id', 'bkash_trx_id', 'bkash_payment_status', 'paid_amount', 'paid_at')
 
     def validate(self, attrs):
         post = attrs.get('post')
@@ -267,7 +273,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             post = Post.objects.select_for_update().get(pk=post.pk)
-            
+
             if post.total_weight_kg < quantity_kg:
                 raise serializers.ValidationError(
                     {"quantity_kg": f"Insufficient stock. Only {post.total_weight_kg}kg available."}
@@ -301,7 +307,6 @@ class ReviewImageSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
-        # Build absolute URI so React Native Image can load it
         if instance.image:
             request = self.context.get('request')
             if request is not None:
@@ -333,7 +338,6 @@ class ReviewSerializer(serializers.ModelSerializer):
         if rating < 1 or rating > 5:
             raise serializers.ValidationError({"rating": "Rating must be between 1 and 5."})
 
-        # Check if customer has a completed order for this specific post
         has_completed_order = Order.objects.filter(
             customer=customer,
             post=post,
@@ -354,3 +358,21 @@ class PaymentSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('user', 'transaction_id', 'status', 'gateway_response')
 
+
+class FarmerBankAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FarmerBankAccount
+        fields = '__all__'
+        read_only_fields = ('farmer',)
+
+
+class BangladeshLocationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BangladeshLocation
+        fields = ('id', 'name_en', 'name_bn', 'level', 'parent')
+
+
+class UserServiceAreaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'service_areas')

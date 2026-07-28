@@ -10,8 +10,7 @@ from .models import User, Post
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        # Excludes sensitive fields like role and is_verified
-        fields = ['name', 'phone_number', 'address', 'email', 'latitude', 'longitude']
+        fields = ['name', 'phone_number', 'address', 'email', 'latitude', 'longitude', 'division', 'district', 'upazila', 'union']
         
     def validate_email(self, value):
         user = self.context['request'].user

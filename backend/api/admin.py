@@ -4,7 +4,7 @@ from django.db.models import Sum, Count
 from django.shortcuts import render
 from django.urls import path
 
-from .models import User, Post, PostImage, Order, Review, ReviewImage, ProductType, OTP, Payment
+from .models import User, Post, PostImage, Order, Review, ReviewImage, ProductType, OTP, Payment, FarmerBankAccount, BangladeshLocation
 
 
 class CustomUserAdmin(UserAdmin):
@@ -14,7 +14,7 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
         ('Custom Fields', {'fields': ('role', 'name', 'phone_number', 'address',
                                        'latitude', 'longitude', 'is_verified',
-                                       'average_rating', 'ratings_count')}),
+                                       'average_rating', 'ratings_count', 'service_areas')}),
     )
 
 
@@ -45,8 +45,8 @@ class PostAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'customer', 'post_title', 'quantity_kg', 'status', 'total_paid', 'created_at')
-    list_filter = ('status', 'created_at')
+    list_display = ('id', 'customer', 'post_title', 'quantity_kg', 'status', 'total_paid', 'bkash_payment_status', 'created_at')
+    list_filter = ('status', 'bkash_payment_status', 'created_at')
     search_fields = ('customer__username', 'post__title')
 
     def post_title(self, obj):
@@ -65,10 +65,25 @@ admin.site.register(OTP)
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('transaction_id', 'user', 'amount', 'status', 'created_at')
-    list_filter = ('status', 'created_at')
+    list_display = ('transaction_id', 'user', 'amount', 'status', 'gateway', 'bkash_trx_id', 'created_at')
+    list_filter = ('status', 'gateway', 'created_at')
     search_fields = ('transaction_id', 'user__username')
     readonly_fields = ('transaction_id', 'user', 'amount', 'gateway_response', 'created_at', 'updated_at')
+
+
+@admin.register(FarmerBankAccount)
+class FarmerBankAccountAdmin(admin.ModelAdmin):
+    list_display = ('farmer', 'bank_name', 'account_number', 'routing_number', 'account_type')
+    list_filter = ('bank_name', 'account_type')
+    search_fields = ('farmer__username', 'farmer__name', 'account_number')
+
+
+@admin.register(BangladeshLocation)
+class BangladeshLocationAdmin(admin.ModelAdmin):
+    list_display = ('name_en', 'name_bn', 'level', 'parent')
+    list_filter = ('level',)
+    search_fields = ('name_en', 'name_bn')
+
 
 admin.site.register(User, CustomUserAdmin)
 
@@ -121,4 +136,3 @@ def patched_get_urls():
 
 
 admin.site.get_urls = patched_get_urls
-# admin.site.index_template = 'admin/stats.html'

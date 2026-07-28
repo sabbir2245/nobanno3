@@ -2,7 +2,7 @@ import { API_BASE_URL } from '@/constants/api';
 
 console.log(`[API] API_BASE_URL = "${API_BASE_URL}"`);
 
-export type UserRole = 'customer' | 'farmer';
+export type UserRole = 'customer' | 'farmer' | 'deliveryman';
 
 export interface User {
   id: number;
@@ -19,6 +19,11 @@ export interface User {
   ratings_count: number;
   total_sales: string | null;
   profile_picture: string | null;
+  service_areas: number[] | null;
+  division: string;
+  district: string;
+  upazila: string;
+  union: string;
 }
 
 export interface ProductType {
@@ -46,6 +51,7 @@ export interface Post {
   farmer: number;
   farmer_name: string;
   farmer_username: string;
+  farmer_phone: string;
   farmer_avg_rating: number | null;
   farmer_ratings_count: number;
   product_type: number | null;
@@ -54,7 +60,12 @@ export interface Post {
   total_price: number;
   distance_km?: number;
   created_at: string;
-  image: string | null ; 
+  image: string | null ;
+  collection_district: string;
+  collection_upazila: string;
+  collection_union: string;
+  collection_ward: string;
+  collection_point_address: string;
 }
 
 export interface Order {
@@ -62,17 +73,31 @@ export interface Order {
   customer: number;
   post: number;
   quantity_kg: string;
-  status: 'pending' | 'shipped' | 'completed' | 'cancelled';
+  status: 'pending' | 'shipped' | 'assigned' | 'out_for_delivery' | 'completed' | 'cancelled';
   total_paid: string;
   platform_fee: string;
   farmer_payout: string;
   delivery_address: string;
+  deliveryman: number | null;
+  deliveryman_name: string | null;
+  deliveryman_username: string | null;
+  deliveryman_phone: string | null;
   post_title: string;
   post_farmer_name: string;
   post_farmer_id: number;
+  post_farmer_phone: string;
+  post_collection_district: string;
+  post_collection_upazila: string;
+  post_collection_union: string;
+  post_collection_ward: string;
+  post_collection_point_address: string;
+  post_latitude: number;
+  post_longitude: number;
   customer_username: string;
   customer_name: string;
+  customer_phone: string;
   created_at: string;
+  distance_km?: number;
 }
 
 export interface ReviewImage {
@@ -93,6 +118,37 @@ export interface Review {
   customer_username: string;
   images: ReviewImage[];
   created_at: string;
+}
+
+export interface BangladeshLocation {
+  id: number;
+  name_en: string;
+  name_bn: string;
+  level: 'division' | 'district' | 'upazila' | 'union' | 'ward';
+  parent: number | null;
+}
+
+export interface DeliverymanPackage {
+  total_orders: number;
+  total_amount: number;
+  farmer_count: number;
+  farmers: Array<{
+    farmer_id: number;
+    farmer_name: string;
+    farmer_phone: string;
+    products: Array<{
+      order_id: number;
+      product_title: string;
+      quantity_kg: string;
+      total_paid: string;
+    }>;
+    total_amount: number;
+    collection_district: string;
+    collection_upazila: string;
+    collection_union: string;
+    collection_ward: string;
+    collection_point_address: string;
+  }>;
 }
 
 class ApiError extends Error {
@@ -128,7 +184,6 @@ async function request<T>(
     response = await fetch(url, { ...options, headers });
   } catch (fetchErr: any) {
     console.log(`[API] FETCH ERROR: ${fetchErr.message}`);
-    console.log(`[API] This usually means the server is unreachable. Check: 1) Server is running, 2) HOST in api.ts matches server IP, 3) ALLOWED_HOSTS on server includes this IP`);
     throw new ApiError(`Network error: ${fetchErr.message}`, 0, null);
   }
 
@@ -296,8 +351,26 @@ export const api = {
   shipOrder: (token: string, orderId: number) =>
     request<Order>(`/orders/${orderId}/ship/`, { method: 'POST' }, token),
 
+  acceptOrder: (token: string, orderId: number) =>
+    request<Order>(`/orders/${orderId}/accept/`, { method: 'POST' }, token),
+
+  pickupOrder: (token: string, orderId: number) =>
+    request<Order>(`/orders/${orderId}/pickup/`, { method: 'POST' }, token),
+
+  deliverOrder: (token: string, orderId: number) =>
+    request<Order>(`/orders/${orderId}/deliver/`, { method: 'POST' }, token),
+
   completeOrder: (token: string, orderId: number) =>
     request<Order>(`/orders/${orderId}/complete/`, { method: 'POST' }, token),
+
+  getAvailableOrders: (token: string, params?: { lat?: number; lng?: number; radius?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.lat) query.set('lat', String(params.lat));
+    if (params?.lng) query.set('lng', String(params.lng));
+    if (params?.radius) query.set('radius', String(params.radius));
+    const qs = query.toString();
+    return request<Order[]>(`/orders/available/${qs ? `?${qs}` : ''}`, { method: 'GET' }, token);
+  },
 
   createBulkOrders: (token: string, items: { post: number; quantity_kg: string }[], delivery_address: string) =>
     request<Order[]>(
@@ -388,6 +461,65 @@ export const api = {
       token,
     ),
 
+  // ── BKASH PAYMENT API ──────────────────────────────────────────────────
+  initiateBkashPayment: (token: string, amount: number) =>
+    request<{
+      payment_id: number;
+      transaction_id: string;
+      bkash_url: string;
+      payment_id_bkash: string;
+      amount: string;
+    }>('/payments/bkash/initiate/', { method: 'POST', body: JSON.stringify({ amount }) }, token),
+
+  getBkashPaymentStatus: (token: string, transactionId: string) =>
+    request<{
+      transaction_id: string;
+      amount: string;
+      status: 'initiated' | 'success' | 'failed' | 'cancelled';
+      gateway: string;
+      bkash_payment_id: string;
+      bkash_trx_id: string;
+      created_at: string;
+    }>(`/payments/bkash/status/${transactionId}/`, { method: 'GET' }, token),
+
+  // ── DELIVERYMAN API ────────────────────────────────────────────────────
+  getDeliverymanDashboard: (token: string, params?: {
+    lat?: number;
+    lng?: number;
+    radius?: number;
+    tab?: 'available' | 'my-deliveries';
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.lat) query.set('lat', String(params.lat));
+    if (params?.lng) query.set('lng', String(params.lng));
+    if (params?.radius) query.set('radius', String(params.radius));
+    if (params?.tab) query.set('tab', params.tab);
+    const qs = query.toString();
+    return request<{
+      orders: Order[];
+      package_summary: DeliverymanPackage;
+    }>(`/deliveryman/dashboard/${qs ? `?${qs}` : ''}`, { method: 'GET' }, token);
+  },
+
+  getServiceAreas: (token: string) =>
+    request<{ service_areas: number[] }>('/deliveryman/service-areas/', { method: 'GET' }, token),
+
+  setServiceAreas: (token: string, serviceAreas: number[]) =>
+    request<{ status: string; service_areas: number[] }>(
+      '/deliveryman/service-areas/',
+      { method: 'POST', body: JSON.stringify({ service_areas: serviceAreas }) },
+      token,
+    ),
+
+  getLocations: (level?: string, parentId?: number) => {
+    const query = new URLSearchParams();
+    if (level) query.set('level', level);
+    if (parentId !== undefined) query.set('parent_id', String(parentId));
+    const qs = query.toString();
+    return request<BangladeshLocation[]>(`/locations/${qs ? `?${qs}` : ''}`, { method: 'GET' });
+  },
+
+  // ── SSLCOMMERZ (deprecated — kept for backward compatibility) ──────────
   initiatePayment: (token: string, amount: number) =>
     request<{
       payment_id: number;

@@ -43,7 +43,17 @@ export default function RegisterScreen() {
   const roleOptions = [
     { label: 'কৃষক', value: 'farmer' },
     { label: 'ক্রেতা', value: 'customer' },
+    { label: 'ডেলিভারি ম্যান', value: 'deliveryman' },
   ];
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'farmer': return 'leaf-outline';
+      case 'customer': return 'cart-outline';
+      case 'deliveryman': return 'bicycle-outline';
+      default: return 'person-outline';
+    }
+  };
 
   const update = (key: string, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -102,7 +112,7 @@ export default function RegisterScreen() {
         >
           <View style={styles.selectBoxContent}>
             <Ionicons
-              name={form.role === 'farmer' ? 'leaf-outline' : 'cart-outline'}
+              name={getRoleIcon(form.role)}
               size={20}
               color={Colors.mediumGreen}
               style={styles.selectIcon}
@@ -142,7 +152,7 @@ export default function RegisterScreen() {
                   >
                     <View style={styles.selectBoxContent}>
                       <Ionicons
-                        name={option.value === 'farmer' ? 'leaf-outline' : 'cart-outline'}
+                        name={getRoleIcon(option.value)}
                         size={20}
                         color={selected ? Colors.white : Colors.mediumGreen}
                         style={styles.selectIcon}

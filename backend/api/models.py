@@ -34,6 +34,13 @@ class User(AbstractUser):
     is_verified = models.BooleanField(default=False)
     average_rating = models.FloatField(null=True, blank=True, default=None)
     ratings_count = models.IntegerField(default=0)
+    # Deliveryman service areas (JSON list of area IDs or descriptions)
+    service_areas = models.JSONField(null=True, blank=True, default=list)
+    # Structured location hierarchy for farmers/customers
+    division = models.CharField(max_length=100, blank=True, default='')
+    district = models.CharField(max_length=100, blank=True, default='')
+    upazila = models.CharField(max_length=100, blank=True, default='')
+    union = models.CharField(max_length=100, blank=True, default='')
 
     @property
     def total_sales(self):
@@ -60,6 +67,12 @@ class Post(models.Model):
     price_per_kg = models.DecimalField(max_digits=10, decimal_places=2)
     latitude = models.FloatField()
     longitude = models.FloatField()
+    # Collection point location hierarchy
+    collection_district = models.CharField(max_length=100, blank=True, default='')
+    collection_upazila = models.CharField(max_length=100, blank=True, default='')
+    collection_union = models.CharField(max_length=100, blank=True, default='')
+    collection_ward = models.CharField(max_length=100, blank=True, default='')
+    collection_point_address = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -92,9 +105,16 @@ class Order(models.Model):
     quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     total_paid = models.DecimalField(max_digits=10, decimal_places=2)
-    platform_fee = models.DecimalField(max_digits=10, decimal_places=2)  # 10%
-    farmer_payout = models.DecimalField(max_digits=10, decimal_places=2)  # 90%
+    platform_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    farmer_payout = models.DecimalField(max_digits=10, decimal_places=2)
     delivery_address = models.TextField()
+    # bKash payment fields on the order
+    bkash_payment_id = models.CharField(max_length=100, null=True, blank=True)
+    bkash_trx_id = models.CharField(max_length=100, null=True, blank=True)
+    bkash_payment_status = models.CharField(max_length=20, null=True, blank=True)
+    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    # Delivery tracking
     picked_up_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -150,13 +170,61 @@ class Payment(models.Model):
         ('failed', 'Failed'),
         ('cancelled', 'Cancelled'),
     )
+    PAYMENT_GATEWAY_CHOICES = (
+        ('sslcommerz', 'SSLCommerz'),
+        ('bkash', 'bKash'),
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     transaction_id = models.CharField(max_length=100, unique=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='initiated')
+    gateway = models.CharField(max_length=20, choices=PAYMENT_GATEWAY_CHOICES, default='bkash')
     gateway_response = models.JSONField(null=True, blank=True)
+    # bKash specific fields
+    bkash_payment_id = models.CharField(max_length=100, null=True, blank=True)
+    bkash_trx_id = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"Payment {self.transaction_id} - {self.status} ({self.amount} BDT)"
+
+
+class FarmerBankAccount(models.Model):
+    ACCOUNT_TYPE_CHOICES = (
+        ('savings', 'Savings'),
+        ('current', 'Current'),
+    )
+    farmer = models.OneToOneField(User, on_delete=models.CASCADE, related_name='bank_account', limit_choices_to={'role': 'farmer'})
+    bank_name = models.CharField(max_length=200)
+    branch_name = models.CharField(max_length=200)
+    routing_number = models.CharField(max_length=20)
+    account_number = models.CharField(max_length=50)
+    account_type = models.CharField(max_length=10, choices=ACCOUNT_TYPE_CHOICES, default='savings')
+    mobile_number = models.CharField(max_length=15)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.farmer.name} - {self.bank_name} ({self.account_number})"
+
+
+class BangladeshLocation(models.Model):
+    LEVEL_CHOICES = (
+        ('division', 'Division'),
+        ('district', 'District'),
+        ('upazila', 'Upazila'),
+        ('union', 'Union'),
+        ('ward', 'Ward'),
+    )
+    name_en = models.CharField(max_length=200)
+    name_bn = models.CharField(max_length=200)
+    level = models.CharField(max_length=20, choices=LEVEL_CHOICES)
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name_en']
+
+    def __str__(self):
+        return f"{self.name_en} ({self.get_level_display()})"

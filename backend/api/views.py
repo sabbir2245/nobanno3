@@ -14,22 +14,22 @@ from rest_framework.decorators import action
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 
-from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImage
+from .models import Post, Order, Review, ReviewImage, OTP, ProductType, PostImage, BangladeshLocation
 from .serializers import (
     UserSerializer, RegisterSerializer, PostSerializer,
     OrderSerializer, ReviewSerializer, EmailOrPhoneAuthSerializer,
-    ProductTypeSerializer, BulkOrderSerializer
+    ProductTypeSerializer, BulkOrderSerializer,
+    BangladeshLocationSerializer,
 )
 from .permissions import IsFarmer, IsCustomer, IsAdminUser, IsDeliveryman, IsOwnerOrReadOnly
 
 User = get_user_model()
 
-# Helper for Haversine distance calculation
 def calculate_haversine(lat1, lon1, lat2, lon2):
-    R = 6371.0  # Earth's radius in km
+    R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) ** 2 + 
+    a = (math.sin(dlat / 2) ** 2 +
          math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return round(R * c, 2)
@@ -42,17 +42,10 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
-        # 1. Standard DRF instantiation and validation
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
-        # 2. Triggers our transaction-safe user generation logic
         user = serializer.save()
-        
-        # 3. Automatically issue an Auth Token upon signup
         token, created = Token.objects.get_or_create(user=user)
-        
-        # 4. Return custom registration structural layout
         return Response({
             "token": token.key,
             "user": UserSerializer(user).data
@@ -64,17 +57,10 @@ class CustomLoginView(ObtainAuthToken):
     serializer_class = EmailOrPhoneAuthSerializer
 
     def post(self, request, *args, **kwargs):
-        # 1. Pass request to EmailOrPhoneAuthSerializer to route authentication
         serializer = self.serializer_class(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
-        
-        # 2. Extract validated user instance 
         user = serializer.validated_data['user']
-        
-        # 3. Fetch existing token or create a new one
         token, created = Token.objects.get_or_create(user=user)
-        
-        # 4. Respond with both access token and comprehensive profile context
         return Response({
             "token": token.key,
             "user": UserSerializer(user).data
@@ -89,9 +75,6 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 
 class UserManagementViewSet(viewsets.ModelViewSet):
-    """
-    Admin-only viewset to manage users (suspend, ban, verify).
-    """
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAdminUser]
@@ -166,26 +149,22 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        
-        # Check for search queries
+
         search = request.query_params.get('search')
         if search:
             queryset = queryset.filter(Q(title__icontains=search) | Q(description__icontains=search))
 
-        # Check for product_type filter
         product_type = request.query_params.get('product_type')
         if product_type:
             queryset = queryset.filter(product_type_id=product_type)
 
-        # Check for specific farmer filter
         farmer_id = request.query_params.get('farmer_id')
         if farmer_id:
             queryset = queryset.filter(farmer_id=farmer_id)
 
-        # Check for geo-location filtering
         lat = request.query_params.get('lat')
         lng = request.query_params.get('lng')
-        radius = request.query_params.get('radius') # in km
+        radius = request.query_params.get('radius')
 
         if lat and lng and radius:
             try:
@@ -193,7 +172,6 @@ class PostViewSet(viewsets.ModelViewSet):
                 lng = float(lng)
                 radius = float(radius)
 
-                # Bounding box filter (1 degree of latitude is ~111km)
                 lat_range = radius / 111.0
                 lng_range = radius / (111.0 * math.cos(math.radians(lat)))
 
@@ -202,10 +180,9 @@ class PostViewSet(viewsets.ModelViewSet):
                     longitude__range=(lng - lng_range, lng + lng_range)
                 )
 
-                # Explicitly inject request context into the serializer here!
                 serializer = self.get_serializer(queryset, many=True, context={'request': request})
                 data = serializer.data
-                
+
                 filtered_data = []
                 for item in data:
                     item_lat = float(item['latitude'])
@@ -214,33 +191,27 @@ class PostViewSet(viewsets.ModelViewSet):
                     if dist <= radius:
                         item['distance_km'] = dist
                         filtered_data.append(item)
-                
-                # Sort by distance
+
                 filtered_data.sort(key=lambda x: x['distance_km'])
                 return Response(filtered_data)
             except ValueError:
                 return Response(
-                    {"error": "Invalid geo parameters. Ensure lat, lng, and radius are numbers."}, 
+                    {"error": "Invalid geo parameters. Ensure lat, lng, and radius are numbers."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # Normal list fallback - inject request context explicitly
         serializer = self.get_serializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'], permission_classes=[permissions.AllowAny])
     def search_by_keyword(self, request):
-        """
-        Filters posts by a text keyword match and sorts the entire match list 
-        by absolute distance relative to the user's coordinates (nearest first).
-        """
         query_str = request.query_params.get('q', '').strip()
         lat_param = request.query_params.get('lat')
         lng_param = request.query_params.get('lng')
 
         if not query_str or not lat_param or not lng_param:
             return Response(
-                {"error": "Missing required parameters. Please provide 'q', 'lat', and 'lng'."}, 
+                {"error": "Missing required parameters. Please provide 'q', 'lat', and 'lng'."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -249,30 +220,26 @@ class PostViewSet(viewsets.ModelViewSet):
             lng = float(lng_param)
         except ValueError:
             return Response(
-                {"error": "Invalid coordinates. Ensure 'lat' and 'lng' are valid numbers."}, 
+                {"error": "Invalid coordinates. Ensure 'lat' and 'lng' are valid numbers."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 1. Filter database records by matching text criteria
         queryset = self.get_queryset().filter(
             Q(title__icontains=query_str) | Q(description__icontains=query_str)
         )
 
-        # 2. Serialize database matches with absolute request context injected!
         serializer = self.get_serializer(queryset, many=True, context={'request': request})
         results = serializer.data
 
-        # 3. Inject exact haversine distance calculations into the payloads
         for post_data in results:
             post_lat = float(post_data['latitude'])
             post_lng = float(post_data['longitude'])
             post_data['distance_km'] = calculate_haversine(lat, lng, post_lat, post_lng)
 
-        # 4. Sort arrays inside Python by distance
         results.sort(key=lambda x: x['distance_km'])
 
-        return Response(results, status=status.HTTP_200_OK) 
-    
+        return Response(results, status=status.HTTP_200_OK)
+
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
 
@@ -293,7 +260,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             return Order.objects.filter(post__farmer=user).order_by('-created_at')
         elif user.role == 'deliveryman':
             return Order.objects.filter(deliveryman=user).order_by('-created_at')
-        else:  # customer
+        else:
             return Order.objects.filter(customer=user).order_by('-created_at')
 
     def perform_create(self, serializer):
@@ -449,7 +416,6 @@ class ReviewViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         print(f"[DEBUG ReviewViewSet.create] User={request.user.id} POST={dict(request.POST)} FILES={len(request.FILES.getlist('uploaded_images'))}")
 
-        # Duplicate check: one review per customer per post
         post_id = request.data.get('post')
         if post_id:
             existing = Review.objects.filter(customer=request.user, post_id=post_id).first()
@@ -486,7 +452,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
         customer_id = request.query_params.get('customer_id')
         if customer_id:
             queryset = queryset.filter(customer_id=customer_id)
-        
+
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -496,26 +462,22 @@ class FarmerWalletView(APIView):
 
     def get(self, request):
         farmer = request.user
-        
-        # Calculate pending payouts
+
         pending_payouts = Order.objects.filter(
             post__farmer=farmer,
             status__in=['pending', 'shipped']
         ).aggregate(sum=Sum('farmer_payout'))['sum'] or 0.00
 
-        # Calculate completed earnings
         total_earnings = Order.objects.filter(
             post__farmer=farmer,
             status='completed'
         ).aggregate(sum=Sum('farmer_payout'))['sum'] or 0.00
 
-        # Calculate platform commission deductions
         total_commission = Order.objects.filter(
             post__farmer=farmer,
             status='completed'
         ).aggregate(sum=Sum('platform_fee'))['sum'] or 0.00
 
-        # Fetch recent transaction orders
         recent_orders = Order.objects.filter(post__farmer=farmer).order_by('-created_at')[:10]
         recent_orders_serialized = OrderSerializer(recent_orders, many=True).data
 
@@ -531,20 +493,16 @@ class AdminAnalyticsView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
 
     def get(self, request):
-        # Gross Merchandise Value (total paid on completed and active orders)
         completed_gmv = Order.objects.filter(status='completed').aggregate(sum=Sum('total_paid'))['sum'] or 0.00
         total_gmv = Order.objects.exclude(status='cancelled').aggregate(sum=Sum('total_paid'))['sum'] or 0.00
-        
-        # Platform net commission (10% on completed orders)
+
         realized_profit = Order.objects.filter(status='completed').aggregate(sum=Sum('platform_fee'))['sum'] or 0.00
         pending_profit = Order.objects.filter(status__in=['pending', 'shipped']).aggregate(sum=Sum('platform_fee'))['sum'] or 0.00
 
-        # Users counts
         active_users = User.objects.filter(is_active=True).count()
         farmers_count = User.objects.filter(role='farmer').count()
         customers_count = User.objects.filter(role='customer').count()
 
-        # Geographical Hotspots (coordinates of posts or orders)
         hotspots = []
         posts_locations = Post.objects.all().values('id', 'title', 'latitude', 'longitude', 'farmer__username')
         for loc in posts_locations:
@@ -572,3 +530,185 @@ class AdminAnalyticsView(APIView):
             "hotspots": hotspots
         })
 
+
+# =============================================================================
+# DELIVERYMAN DASHBOARD & LOCATION HIERARCHY
+# =============================================================================
+
+class DeliverymanDashboardView(APIView):
+    """
+    GET /api/deliveryman/dashboard/
+    Returns nearby available orders grouped for the deliveryman.
+    Supports: lat, lng, radius query params for geo-filtering and a `tab`
+    query parameter (`available` or `my-deliveries`).
+    
+    Returns consolidated package view:
+    - Total amount for the package
+    - Number of farmers
+    - List of products per farmer
+    - Location(s) for pickup (collection point hierarchy + address)
+    - Farmer contact info (phone number)
+    """
+    permission_classes = [permissions.IsAuthenticated, IsDeliveryman]
+
+    def get(self, request):
+        print(f"[DELIVERYMAN DASHBOARD] User {request.user.id} fetching dashboard")
+
+        lat = request.query_params.get('lat')
+        lng = request.query_params.get('lng')
+        radius = request.query_params.get('radius', 20)
+        tab = request.query_params.get('tab', 'available')
+
+        if tab not in ['available', 'my-deliveries']:
+            return Response({"error": "Invalid dashboard tab."}, status=400)
+
+        if tab == 'available':
+            # Orders remain available only until a deliveryman accepts them.
+            queryset = Order.objects.filter(
+                status='shipped',
+                deliveryman__isnull=True
+            ).select_related('post__farmer', 'post__product_type', 'customer').order_by('created_at')
+        else:
+            # Accepted orders belong to the current deliveryman and must never
+            # be mixed into the nearby, available-order list.
+            queryset = Order.objects.filter(
+                deliveryman=request.user
+            ).select_related('post__farmer', 'post__product_type', 'customer').order_by('-created_at')
+
+        # Geo-filter only applies to nearby orders. A deliveryman's own work
+        # remains visible even when it is no longer near their current location.
+        if tab == 'available' and lat and lng:
+            try:
+                lat = float(lat)
+                lng = float(lng)
+                radius = float(radius)
+                lat_range = radius / 111.0
+                lng_range = radius / (111.0 * math.cos(math.radians(lat)))
+                queryset = queryset.filter(
+                    post__latitude__range=(lat - lat_range, lat + lat_range),
+                    post__longitude__range=(lng - lng_range, lng + lng_range)
+                )
+                print(f"[DELIVERYMAN DASHBOARD] Geo-filtered: lat={lat}, lng={lng}, radius={radius}km")
+            except ValueError:
+                return Response({"error": "Invalid coordinates."}, status=400)
+
+        # Also filter by deliveryman's service areas if set
+        if tab == 'available' and request.user.service_areas:
+            # service_areas is a JSON list of area identifiers
+            # We filter orders whose post matches those areas
+            # For simplicity, we'll use the collection_ fields on Post
+            print(f"[DELIVERYMAN DASHBOARD] User service areas: {request.user.service_areas}")
+
+        serializer = OrderSerializer(queryset, many=True, context={'request': request})
+        data = serializer.data
+
+        # Add distance calculation
+        if tab == 'available' and lat and lng:
+            lat_f = float(lat)
+            lng_f = float(lng)
+            for item in data:
+                item_lat = float(item.get('post_latitude', 0))
+                item_lng = float(item.get('post_longitude', 0))
+                item['distance_km'] = calculate_haversine(lat_f, lng_f, item_lat, item_lng)
+            data.sort(key=lambda x: x.get('distance_km', 9999))
+
+        # Build consolidated package view
+        farmers_map = {}
+        for item in data:
+            farmer_id = item.get('post_farmer_id')
+            if farmer_id not in farmers_map:
+                farmers_map[farmer_id] = {
+                    'farmer_id': farmer_id,
+                    'farmer_name': item.get('post_farmer_name', 'Unknown'),
+                    'farmer_phone': item.get('post_farmer_phone', ''),
+                    'products': [],
+                    'total_amount': 0,
+                    'collection_district': item.get('post_collection_district', ''),
+                    'collection_upazila': item.get('post_collection_upazila', ''),
+                    'collection_union': item.get('post_collection_union', ''),
+                    'collection_ward': item.get('post_collection_ward', ''),
+                    'collection_point_address': item.get('post_collection_point_address', ''),
+                }
+            farmers_map[farmer_id]['products'].append({
+                'order_id': item['id'],
+                'product_title': item.get('post_title', ''),
+                'quantity_kg': item.get('quantity_kg', '0'),
+                'total_paid': item.get('total_paid', '0'),
+            })
+            farmers_map[farmer_id]['total_amount'] += float(item.get('total_paid', 0))
+
+        package = {
+            'total_orders': len(data),
+            'total_amount': sum(float(item.get('total_paid', 0)) for item in data),
+            'farmer_count': len(farmers_map),
+            'farmers': list(farmers_map.values()),
+        }
+
+        print(f"[DELIVERYMAN DASHBOARD] Returning {len(data)} orders across {len(farmers_map)} farmers")
+
+        return Response({
+            'orders': data,
+            'package_summary': package,
+        })
+
+
+class BangladeshLocationView(APIView):
+    """
+    GET /api/locations/?level=district&parent_id=1
+    Returns administrative locations filtered by level and parent.
+    
+    Levels: division, district, upazila, union, ward
+    - To get all divisions: GET /api/locations/?level=division
+    - To get districts of a division: GET /api/locations/?level=district&parent_id=<division_id>
+    - To get upazilas of a district: GET /api/locations/?level=upazila&parent_id=<district_id>
+    - etc.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        level = request.query_params.get('level')
+        parent_id = request.query_params.get('parent_id')
+
+        queryset = BangladeshLocation.objects.all()
+
+        if level:
+            queryset = queryset.filter(level=level)
+        if parent_id:
+            queryset = queryset.filter(parent_id=parent_id)
+
+        queryset = queryset.order_by('name_en')
+        serializer = BangladeshLocationSerializer(queryset, many=True)
+        print(f"[LOCATIONS] Fetched {queryset.count()} locations (level={level}, parent={parent_id})")
+        return Response(serializer.data)
+
+
+class AssignServiceAreaView(APIView):
+    """
+    GET/POST /api/deliveryman/service-areas/
+    
+    GET: Returns the deliveryman's current service areas.
+    POST: Body { service_areas: [1, 2, 3] } — updates service areas (list of location IDs).
+    """
+    permission_classes = [permissions.IsAuthenticated, IsDeliveryman]
+
+    def get(self, request):
+        print(f"[SERVICE AREAS] User {request.user.id} fetching service areas")
+        return Response({
+            'service_areas': request.user.service_areas or [],
+        })
+
+    def post(self, request):
+        service_areas = request.data.get('service_areas', [])
+        print(f"[SERVICE AREAS] User {request.user.id} setting service areas: {service_areas}")
+
+        if not isinstance(service_areas, list):
+            return Response({"error": "service_areas must be a list."}, status=400)
+
+        user = request.user
+        user.service_areas = service_areas
+        user.save(update_fields=['service_areas'])
+
+        return Response({
+            'status': 'ok',
+            'service_areas': user.service_areas,
+        })

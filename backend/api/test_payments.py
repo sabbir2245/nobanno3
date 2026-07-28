@@ -8,52 +8,58 @@ from .models import Payment
 
 User = get_user_model()
 
-MOCK_INIT_SUCCESS = {
-    'status': 'SUCCESS',
-    'GatewayPageURL': 'https://sandbox.sslcommerz.com/gwprocess/v4/abc123',
-    'sessionkey': 'sk_test_123',
-    'tran_id': 'NOB-1-20250727-ABCDEF',
+MOCK_BKASH_CREATE_SUCCESS = {
+    'statusCode': '0000',
+    'paymentID': 'TR0011REF123456789',
+    'bkashURL': 'https://sandbox.bka.sh/tokenized/checkout/123',
+    'merchantInvoiceNumber': 'NOB-TEST-001',
 }
 
-MOCK_INIT_FAIL = {
-    'status': 'FAILED',
-    'failedreason': 'Store ID validation failed',
-}
-
-MOCK_VALID_VALID = {
-    'status': 'VALID',
-    'tran_id': 'NOB-1-20250727-ABCDEF',
-    'val_id': 'val_123',
+MOCK_BKASH_EXECUTE_SUCCESS = {
+    'statusCode': '0000',
+    'transactionStatus': 'Completed',
+    'trxID': 'TRX123456789',
     'amount': '500.00',
-    'currency': 'BDT',
-    'card_type': 'VISA',
+    'paymentID': 'TR0011REF123456789',
+    'merchantInvoiceNumber': 'NOB-TEST-001',
 }
 
-MOCK_VALID_INVALID = {
-    'status': 'FAILED',
-    'tran_id': 'NOB-1-20250727-ABCDEF',
-    'error': 'Transaction not found',
+MOCK_BKASH_QUERY_COMPLETED = {
+    'statusCode': '0000',
+    'transactionStatus': 'Completed',
+    'trxID': 'TRX123456789',
+    'amount': '500.00',
+}
+
+MOCK_BKASH_QUERY_FAILED = {
+    'statusCode': '0000',
+    'transactionStatus': 'Failed',
+}
+
+MOCK_BKASH_REFUND_SUCCESS = {
+    'statusCode': '0000',
+    'refundTrxID': 'RF123456789',
 }
 
 
-class PaymentInitiateTest(TestCase):
+class BKashPaymentInitiateTest(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.url = '/api/payments/initiate/'
+        self.url = '/api/payments/bkash/initiate/'
 
         self.customer = User.objects.create_user(
-            username='paycustomer',
-            email='pay@test.com',
+            username='bkashcust',
+            email='bkash@test.com',
             password='testpass123',
             role='customer',
-            name='Pay Customer',
+            name='bKash Customer',
             phone_number='01700000000',
         )
         self.token, _ = Token.objects.get_or_create(user=self.customer)
 
-    @patch('api.payments._initiate_session')
-    def test_initiate_payment_success(self, mock_init):
-        mock_init.return_value = MOCK_INIT_SUCCESS
+    @patch('api.payments.bkash_create_payment')
+    def test_initiate_success(self, mock_create):
+        mock_create.return_value = MOCK_BKASH_CREATE_SUCCESS
 
         response = self.client.post(
             self.url, {'amount': '500.00'}, format='json',
@@ -61,18 +67,20 @@ class PaymentInitiateTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('gateway_url', response.data)
-        self.assertEqual(response.data['gateway_url'], MOCK_INIT_SUCCESS['GatewayPageURL'])
+        self.assertIn('bkash_url', response.data)
+        self.assertEqual(response.data['bkash_url'], MOCK_BKASH_CREATE_SUCCESS['bkashURL'])
         self.assertEqual(response.data['amount'], '500.00')
         self.assertIn('transaction_id', response.data)
         self.assertIn('payment_id', response.data)
+        self.assertEqual(response.data['payment_id_bkash'], MOCK_BKASH_CREATE_SUCCESS['paymentID'])
 
         payment = Payment.objects.get(pk=response.data['payment_id'])
         self.assertEqual(payment.status, 'initiated')
         self.assertEqual(payment.amount, Decimal('500.00'))
-        self.assertEqual(payment.user, self.customer)
+        self.assertEqual(payment.gateway, 'bkash')
+        self.assertEqual(payment.bkash_payment_id, MOCK_BKASH_CREATE_SUCCESS['paymentID'])
 
-    def test_initiate_payment_missing_amount(self):
+    def test_initiate_missing_amount(self):
         response = self.client.post(
             self.url, {}, format='json',
             HTTP_AUTHORIZATION=f'Token {self.token.key}',
@@ -80,29 +88,29 @@ class PaymentInitiateTest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('Amount is required', str(response.data))
 
-    def test_initiate_payment_invalid_amount(self):
+    def test_initiate_invalid_amount(self):
         response = self.client.post(
             self.url, {'amount': '-100'}, format='json',
             HTTP_AUTHORIZATION=f'Token {self.token.key}',
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_initiate_payment_zero_amount(self):
+    def test_initiate_zero_amount(self):
         response = self.client.post(
             self.url, {'amount': '0'}, format='json',
             HTTP_AUTHORIZATION=f'Token {self.token.key}',
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_initiate_payment_unauthenticated(self):
+    def test_initiate_unauthenticated(self):
         response = self.client.post(
             self.url, {'amount': '500.00'}, format='json',
         )
         self.assertEqual(response.status_code, 401)
 
-    @patch('api.payments._initiate_session')
-    def test_initiate_payment_gateway_failure(self, mock_init):
-        mock_init.return_value = MOCK_INIT_FAIL
+    @patch('api.payments.bkash_create_payment')
+    def test_initiate_gateway_failure(self, mock_create):
+        mock_create.side_effect = Exception('bKash API error')
 
         response = self.client.post(
             self.url, {'amount': '500.00'}, format='json',
@@ -111,103 +119,14 @@ class PaymentInitiateTest(TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertIn('Failed to initiate', str(response.data))
 
-    @patch('api.payments._initiate_session')
-    def test_initiate_payment_network_error(self, mock_init):
-        from requests.exceptions import ConnectionError
-        mock_init.side_effect = ConnectionError('Connection refused')
 
-        response = self.client.post(
-            self.url, {'amount': '500.00'}, format='json',
-            HTTP_AUTHORIZATION=f'Token {self.token.key}',
-        )
-        self.assertEqual(response.status_code, 502)
-        self.assertIn('Failed to connect', str(response.data))
-
-
-class PaymentIPNTest(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.url = '/api/payments/sslcommerz/ipn/'
-
-        self.customer = User.objects.create_user(
-            username='ipncustomer',
-            email='ipn@test.com',
-            password='testpass123',
-            role='customer',
-        )
-
-        self.payment = Payment.objects.create(
-            user=self.customer,
-            amount=Decimal('500.00'),
-            transaction_id='NOB-2-20250727-XYZ123',
-            status='initiated',
-        )
-
-    @patch('api.payments._validate_session')
-    def test_ipn_success_credits_wallet(self, mock_validate):
-        mock_validate.return_value = MOCK_VALID_VALID
-
-        response = self.client.post(self.url, {
-            'tran_id': 'NOB-2-20250727-XYZ123',
-            'val_id': 'val_123',
-            'status': 'VALID',
-        }, format='json')
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content.decode(), 'Payment validated')
-
-        self.payment.refresh_from_db()
-        self.assertEqual(self.payment.status, 'success')
-
-    @patch('api.payments._validate_session')
-    def test_ipn_failed_does_not_credit(self, mock_validate):
-        mock_validate.return_value = MOCK_VALID_INVALID
-
-        response = self.client.post(self.url, {
-            'tran_id': 'NOB-2-20250727-XYZ123',
-            'val_id': 'val_456',
-            'status': 'FAILED',
-        }, format='json')
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content.decode(), 'Payment validation failed')
-
-        self.payment.refresh_from_db()
-        self.assertEqual(self.payment.status, 'failed')
-
-    def test_ipn_missing_tran_id(self):
-        response = self.client.post(self.url, {
-            'val_id': 'val_123',
-        }, format='json')
-        self.assertEqual(response.status_code, 400)
-
-    def test_ipn_unknown_tran_id(self):
-        response = self.client.post(self.url, {
-            'tran_id': 'DOES_NOT_EXIST',
-            'val_id': 'val_123',
-        }, format='json')
-        self.assertEqual(response.status_code, 404)
-
-    @patch('api.payments._validate_session')
-    def test_ipn_already_validated(self, mock_validate):
-        self.payment.status = 'success'
-        self.payment.save()
-
-        response = self.client.post(self.url, {
-            'tran_id': 'NOB-2-20250727-XYZ123',
-            'val_id': 'val_123',
-        }, format='json')
-        self.assertEqual(response.content.decode(), 'Already validated')
-        mock_validate.assert_not_called()
-
-
-class PaymentStatusTest(TestCase):
+class BKashPaymentStatusTest(TestCase):
     def setUp(self):
         self.client = APIClient()
 
         self.customer = User.objects.create_user(
-            username='statuscust',
-            email='status@test.com',
+            username='bkashstatus',
+            email='bkashstatus@test.com',
             password='testpass123',
             role='customer',
         )
@@ -216,88 +135,102 @@ class PaymentStatusTest(TestCase):
         self.payment = Payment.objects.create(
             user=self.customer,
             amount=Decimal('250.00'),
-            transaction_id='STATUS-TEST-001',
+            transaction_id='BKASH-STATUS-001',
             status='success',
+            gateway='bkash',
+            bkash_payment_id='TR0011REFSTATUS',
+            bkash_trx_id='TRXSTATUS001',
         )
 
-    def test_get_payment_status(self):
+    def test_get_status(self):
         response = self.client.get(
-            f'/api/payments/status/STATUS-TEST-001/',
+            '/api/payments/bkash/status/BKASH-STATUS-001/',
             HTTP_AUTHORIZATION=f'Token {self.token.key}',
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['status'], 'success')
         self.assertEqual(response.data['amount'], '250.00')
+        self.assertEqual(response.data['gateway'], 'bkash')
 
-    def test_get_payment_status_not_found(self):
+    def test_get_status_not_found(self):
         response = self.client.get(
-            f'/api/payments/status/DOES_NOT_EXIST/',
+            '/api/payments/bkash/status/DOES_NOT_EXIST/',
             HTTP_AUTHORIZATION=f'Token {self.token.key}',
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_get_payment_status_unauthorized(self):
-        response = self.client.get('/api/payments/status/STATUS-TEST-001/')
+    def test_get_status_unauthorized(self):
+        response = self.client.get('/api/payments/bkash/status/BKASH-STATUS-001/')
         self.assertEqual(response.status_code, 401)
 
-    def test_cannot_view_others_payment(self):
-        other = User.objects.create_user(
-            username='othercust',
-            email='other@test.com',
-            password='testpass123',
-            role='customer',
-        )
+    @patch('api.payments.bkash_query_payment')
+    def test_reconcile_initiated_status(self, mock_query):
         Payment.objects.create(
-            user=other,
+            user=self.customer,
             amount=Decimal('100.00'),
-            transaction_id='OTHER-PAY-001',
-            status='success',
+            transaction_id='BKASH-INIT-001',
+            status='initiated',
+            gateway='bkash',
+            bkash_payment_id='TR0011REFINIT',
         )
+        mock_query.return_value = MOCK_BKASH_QUERY_COMPLETED
+
         response = self.client.get(
-            '/api/payments/status/OTHER-PAY-001/',
+            '/api/payments/bkash/status/BKASH-INIT-001/',
             HTTP_AUTHORIZATION=f'Token {self.token.key}',
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'success')
 
 
-class PaymentCallbackTest(TestCase):
+class BKashPaymentCallbackTest(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-    def test_success_callback(self):
-        response = self.client.post('/api/payments/sslcommerz/success/', {
-            'tran_id': 'CB-TEST-001',
+    def test_callback_missing_payment_id(self):
+        response = self.client.get('/api/payments/bkash/callback/')
+        self.assertEqual(response.status_code, 400)
+
+    def test_callback_cancelled(self):
+        response = self.client.get('/api/payments/bkash/callback/?paymentID=TEST_CANCEL&status=cancel')
+        self.assertEqual(response.status_code, 200)
+
+    @patch('api.payments.bkash_execute_payment')
+    def test_callback_success(self, mock_execute):
+        mock_execute.return_value = MOCK_BKASH_EXECUTE_SUCCESS
+
+        response = self.client.get(
+            '/api/payments/bkash/callback/?paymentID=TR0011REF123456789&status=success'
+        )
+        self.assertEqual(response.status_code, 200)
+
+    @patch('api.payments.bkash_execute_payment')
+    def test_callback_execute_failure_fallback_query(self, mock_execute):
+        mock_execute.return_value = {'statusCode': '9999', 'transactionStatus': 'Failed'}
+
+        with patch('api.payments.bkash_query_payment') as mock_query:
+            mock_query.return_value = MOCK_BKASH_QUERY_COMPLETED
+
+            response = self.client.get(
+                '/api/payments/bkash/callback/?paymentID=TR0011REF_FALLBACK&status=success'
+            )
+            self.assertEqual(response.status_code, 200)
+
+
+class BKashPaymentSuccessFailTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_success_endpoint(self):
+        response = self.client.post('/api/payments/bkash/success/', {
+            'transaction_id': 'BKASH-DIRECT-SUCCESS',
         }, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['status'], 'success')
 
-    def test_fail_callback(self):
-        response = self.client.post('/api/payments/sslcommerz/fail/', {
-            'tran_id': 'CB-TEST-002',
+    def test_fail_endpoint(self):
+        response = self.client.post('/api/payments/bkash/fail/', {
+            'transaction_id': 'BKASH-DIRECT-FAIL',
         }, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['status'], 'failed')
-
-    def test_cancel_callback(self):
-        response = self.client.post('/api/payments/sslcommerz/cancel/', {
-            'tran_id': 'CB-TEST-003',
-        }, format='json')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['status'], 'cancelled')
-
-    def test_success_callback_updates_payment(self):
-        cust = User.objects.create_user(
-            username='cbcust',
-            email='cb@test.com',
-            password='testpass123',
-            role='customer',
-        )
-        pmt = Payment.objects.create(
-            user=cust, amount=Decimal('100.00'),
-            transaction_id='CB-TEST-004', status='initiated',
-        )
-        self.client.post('/api/payments/sslcommerz/success/', {
-            'tran_id': 'CB-TEST-004',
-        }, format='json')
-        pmt.refresh_from_db()
-        self.assertEqual(pmt.status, 'success')

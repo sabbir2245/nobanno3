@@ -122,9 +122,6 @@ export default function CartScreen() {
                 style={{ flex: 1 }}
               />
             </View>
-            <Text style={styles.paymentNote}>
-              Payment auto-approved for demo.
-            </Text>
           </View>
         </View>
       </Modal>
@@ -153,5 +150,4 @@ const styles = StyleSheet.create({
   modalTitle: { fontFamily: Fonts.bold, fontSize: 18, color: Colors.textDark, marginBottom: Spacing.md },
   addressInput: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textDark, backgroundColor: Colors.paleGreen, borderRadius: Radius.md, padding: Spacing.md, minHeight: 80, textAlignVertical: 'top', marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.border },
   modalActions: { flexDirection: 'row', gap: Spacing.sm },
-  paymentNote: { fontFamily: Fonts.regular, fontSize: 12, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.sm, fontStyle: 'italic' },
 });

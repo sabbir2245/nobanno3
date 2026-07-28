@@ -23,7 +23,8 @@ export default function LocationScreen() {
     
     // 1. If tokens exist, route directly to the appropriate role dashboard
     if (token && user) {
-      router.replace(user.role === 'farmer' ? '/(farmer)/dashboard' : '/(customer)/home');
+      const route = user.role === 'farmer' ? '/(farmer)/dashboard' : user.role === 'deliveryman' ? '/(deliveryman)/dashboard' : '/(customer)/home';
+      router.replace(route);
       return;
     }
     

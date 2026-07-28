@@ -5,12 +5,15 @@ from .views import (
     RegisterView, CustomLoginView, UserProfileView,
     UserManagementViewSet, PostViewSet, OrderViewSet,
     ReviewViewSet, FarmerWalletView, AdminAnalyticsView,
-    ProductTypeViewSet,
+    ProductTypeViewSet, DeliverymanDashboardView,
+    BangladeshLocationView, AssignServiceAreaView,
 )
 from .update import UserUpdateView, PostUpdateView
 from .payments import (
-    PaymentInitiateView, PaymentSuccessView, PaymentFailView,
-    PaymentCancelView, PaymentIPNView, PaymentStatusView,
+    BKashPaymentInitiateView, BKashPaymentCallbackView,
+    BKashPaymentSuccessView, BKashPaymentFailView,
+    BKashPaymentStatusView, BKashPaymentRefundView,
+    BEFTNInvoiceView,
 )
 
 router = DefaultRouter()
@@ -23,12 +26,12 @@ router.register(r'product-types', ProductTypeViewSet, basename='product-types')
 urlpatterns = [
     # Router endpoints
     path('', include(router.urls)),
-    
+
     # Custom auth endpoints
     path('auth/register/', RegisterView.as_view(), name='auth-register'),
     path('auth/login/', CustomLoginView.as_view(), name='auth-login'),
     path('auth/profile/', UserProfileView.as_view(), name='auth-profile'),
-    
+
     # Password reset endpoints
     path('auth/forgot-password/', ForgotPasswordView.as_view(), name='auth-forgot-password'),
     path('auth/reset-password/', ResetPasswordView.as_view(), name='auth-reset-password'),
@@ -40,11 +43,25 @@ urlpatterns = [
     path('profile/update/', UserUpdateView.as_view(), name='profile-update'),
     path('posts/<int:pk>/update/', PostUpdateView.as_view(), name='post-update'),
 
-    # SSLCommerz payments
-    path('payments/initiate/', PaymentInitiateView.as_view(), name='payment-initiate'),
-    path('payments/sslcommerz/success/', PaymentSuccessView.as_view(), name='payment-success'),
-    path('payments/sslcommerz/fail/', PaymentFailView.as_view(), name='payment-fail'),
-    path('payments/sslcommerz/cancel/', PaymentCancelView.as_view(), name='payment-cancel'),
-    path('payments/sslcommerz/ipn/', PaymentIPNView.as_view(), name='payment-ipn'),
-    path('payments/status/<str:transaction_id>/', PaymentStatusView.as_view(), name='payment-status'),
+    # ── BKASH PAYMENT ROUTES ────────────────────────────────────────────────
+    # Leg 1: Customer → Admin via bKash Tokenized Checkout
+    path('payments/bkash/initiate/', BKashPaymentInitiateView.as_view(), name='bkash-payment-initiate'),
+    path('payments/bkash/callback/', BKashPaymentCallbackView.as_view(), name='bkash-payment-callback'),
+    path('payments/bkash/success/', BKashPaymentSuccessView.as_view(), name='bkash-payment-success'),
+    path('payments/bkash/fail/', BKashPaymentFailView.as_view(), name='bkash-payment-fail'),
+    path('payments/bkash/status/<str:transaction_id>/', BKashPaymentStatusView.as_view(), name='bkash-payment-status'),
+    path('payments/bkash/refund/', BKashPaymentRefundView.as_view(), name='bkash-payment-refund'),
+
+    # ── BEFTN CSV INVOICE (Leg 2: Admin → Farmer bank settlement) ───────────
+    path('payments/beftn/invoice/', BEFTNInvoiceView.as_view(), name='beftn-invoice'),
+
+    # ── LOCATION HIERARCHY (cascading dropdowns for delivery system) ─────────
+    path('locations/', BangladeshLocationView.as_view(), name='locations-list'),
+
+    # ── DELIVERYMAN DASHBOARD ───────────────────────────────────────────────
+    path('deliveryman/dashboard/', DeliverymanDashboardView.as_view(), name='deliveryman-dashboard'),
+    path('deliveryman/service-areas/', AssignServiceAreaView.as_view(), name='deliveryman-service-areas'),
+
+    # ── DEPRECATED SSLCOMMERZ ROUTES (kept for reference, not routed) ───────
+    # SSLCommerz routes have been removed. bKash is the only payment method.
 ]

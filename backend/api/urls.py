@@ -5,15 +5,16 @@ from .views import (
     RegisterView, CustomLoginView, UserProfileView,
     UserManagementViewSet, PostViewSet, OrderViewSet,
     ReviewViewSet, FarmerWalletView, AdminAnalyticsView,
-    ProductTypeViewSet, DeliverymanDashboardView,
+    ProductTypeViewSet,
     BangladeshLocationView, AssignServiceAreaView,
+    AreaViewSet, BatchViewSet, DemoPayView,
 )
 from .update import UserUpdateView, PostUpdateView
 from .payments import (
     BKashPaymentInitiateView, BKashPaymentCallbackView,
     BKashPaymentSuccessView, BKashPaymentFailView,
     BKashPaymentStatusView, BKashPaymentRefundView,
-    BEFTNInvoiceView,
+    BEFTNInvoiceView, SettlementDownloadView,
 )
 
 router = DefaultRouter()
@@ -22,6 +23,8 @@ router.register(r'posts', PostViewSet, basename='posts')
 router.register(r'orders', OrderViewSet, basename='orders')
 router.register(r'reviews', ReviewViewSet, basename='reviews')
 router.register(r'product-types', ProductTypeViewSet, basename='product-types')
+router.register(r'areas', AreaViewSet, basename='areas')
+router.register(r'batches', BatchViewSet, basename='batches')
 
 urlpatterns = [
     # Router endpoints
@@ -51,6 +54,8 @@ urlpatterns = [
     path('payments/bkash/fail/', BKashPaymentFailView.as_view(), name='bkash-payment-fail'),
     path('payments/bkash/status/<str:transaction_id>/', BKashPaymentStatusView.as_view(), name='bkash-payment-status'),
     path('payments/bkash/refund/', BKashPaymentRefundView.as_view(), name='bkash-payment-refund'),
+    path('payments/demo/', DemoPayView.as_view(), name='demo-pay'),
+    path('payments/settlement/download/', SettlementDownloadView.as_view(), name='settlement-download'),
 
     # ── BEFTN CSV INVOICE (Leg 2: Admin → Farmer bank settlement) ───────────
     path('payments/beftn/invoice/', BEFTNInvoiceView.as_view(), name='beftn-invoice'),
@@ -58,8 +63,7 @@ urlpatterns = [
     # ── LOCATION HIERARCHY (cascading dropdowns for delivery system) ─────────
     path('locations/', BangladeshLocationView.as_view(), name='locations-list'),
 
-    # ── DELIVERYMAN DASHBOARD ───────────────────────────────────────────────
-    path('deliveryman/dashboard/', DeliverymanDashboardView.as_view(), name='deliveryman-dashboard'),
+    # ── DELIVERYMAN SERVICE AREAS ────────────────────────────────────────────
     path('deliveryman/service-areas/', AssignServiceAreaView.as_view(), name='deliveryman-service-areas'),
 
     # ── DEPRECATED SSLCOMMERZ ROUTES (kept for reference, not routed) ───────

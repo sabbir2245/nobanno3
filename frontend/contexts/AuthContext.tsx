@@ -32,6 +32,7 @@ interface AuthContextValue {
     role: UserRole;
     name?: string;
     address?: string;
+    location: number;
   }) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -116,14 +117,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role: UserRole;
       name?: string;
       address?: string;
+      location: number;
     }) => {
       await api.register({
         ...data,
-        latitude: location?.latitude,
-        longitude: location?.longitude,
       });
     },
-    [location],
+    [],
   );
 
   const logout = useCallback(async () => {

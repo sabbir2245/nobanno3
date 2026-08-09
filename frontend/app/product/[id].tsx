@@ -32,7 +32,7 @@ const MIN_QTY = 0;
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { token, location } = useAuth();
+  const { token } = useAuth();
   const { addItem } = useCart();
   const [post, setPost] = useState<Post | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -219,6 +219,23 @@ export default function ProductDetailScreen() {
           </View>
         </View>
 
+        {post.location && (
+          <View style={styles.locationCard}>
+            <Ionicons name="location-outline" size={16} color={Colors.darkGreen} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.locationTitle}>Collection Location</Text>
+              <Text style={styles.locationValue}>
+                {[post.location.division, post.location.district, post.location.upazila, post.location.union]
+                  .filter(Boolean)
+                  .join(' → ')}
+              </Text>
+            </View>
+            {post.distance_km != null && (
+              <Text style={styles.distanceText}>{post.distance_km} km away</Text>
+            )}
+          </View>
+        )}
+
         <Text style={styles.sectionLabel}>Quantity (kg)</Text>
         <TextInput
           style={styles.qtyInput}
@@ -384,6 +401,18 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, backgroundColor: Colors.cream, borderRadius: Radius.md, padding: Spacing.sm },
   statLabel: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted },
   statValue: { fontFamily: Fonts.semiBold, fontSize: 13, color: Colors.textDark, marginTop: 2 },
+  locationCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    backgroundColor: Colors.cream,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  locationTitle: { fontFamily: Fonts.semiBold, fontSize: 12, color: Colors.textMuted },
+  locationValue: { fontFamily: Fonts.medium, fontSize: 14, color: Colors.textDark, marginTop: 2 },
+  distanceText: { fontFamily: Fonts.bold, fontSize: 13, color: Colors.darkGreen },
   sectionLabel: { fontFamily: Fonts.semiBold, fontSize: 15, color: Colors.textDark, marginBottom: Spacing.sm },
   qtyInput: {
     borderWidth: 1,

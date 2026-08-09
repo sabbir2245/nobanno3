@@ -29,18 +29,16 @@ class User(AbstractUser):
     phone_number = models.CharField(max_length=15, blank=True, null=True,)
     address = models.TextField(blank=True, null=True)
     email = models.EmailField(unique=True)
-    latitude = models.FloatField(blank=True, null=True)
-    longitude = models.FloatField(blank=True, null=True)
     is_verified = models.BooleanField(default=False)
     average_rating = models.FloatField(null=True, blank=True, default=None)
     ratings_count = models.IntegerField(default=0)
-    # Deliveryman service areas (JSON list of area IDs or descriptions)
+    # Deliveryman service areas (JSON list of Area IDs)
     service_areas = models.JSONField(null=True, blank=True, default=list)
-    # Structured location hierarchy for farmers/customers
-    division = models.CharField(max_length=100, blank=True, default='')
-    district = models.CharField(max_length=100, blank=True, default='')
-    upazila = models.CharField(max_length=100, blank=True, default='')
-    union = models.CharField(max_length=100, blank=True, default='')
+    # Structured location (Division -> District -> Upazila -> Union).
+    # Required by the API for every role; nullable at DB level for migration safety.
+    location = models.ForeignKey(
+        'BangladeshLocation', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='users')
 
     @property
     def total_sales(self):
@@ -65,13 +63,11 @@ class Post(models.Model):
     image = models.ImageField(upload_to='post_images/', blank=True, null=True)
     total_weight_kg = models.DecimalField(max_digits=10, decimal_places=2)
     price_per_kg = models.DecimalField(max_digits=10, decimal_places=2)
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    # Collection point location hierarchy
-    collection_district = models.CharField(max_length=100, blank=True, default='')
-    collection_upazila = models.CharField(max_length=100, blank=True, default='')
-    collection_union = models.CharField(max_length=100, blank=True, default='')
-    collection_ward = models.CharField(max_length=100, blank=True, default='')
+    # Collection point location (a Union/Upazila BangladeshLocation node).
+    # Required by the API; nullable at DB level for migration safety.
+    location = models.ForeignKey(
+        'BangladeshLocation', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='posts')
     collection_point_address = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -93,15 +89,11 @@ class PostImage(models.Model):
 class Order(models.Model):
     STATUS_CHOICES = (
         ('pending', 'Pending'),
-        ('shipped', 'Shipped'),
-        ('assigned', 'Assigned'),
-        ('out_for_delivery', 'Out for Delivery'),
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
     )
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders', limit_choices_to={'role': 'customer'})
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='orders')
-    deliveryman = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='deliveries')
     quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     total_paid = models.DecimalField(max_digits=10, decimal_places=2)
@@ -114,8 +106,7 @@ class Order(models.Model):
     bkash_payment_status = models.CharField(max_length=20, null=True, blank=True)
     paid_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
-    # Delivery tracking
-    picked_up_at = models.DateTimeField(null=True, blank=True)
+    # Delivery tracking (set when the batch containing this order is delivered)
     delivered_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -175,6 +166,7 @@ class Payment(models.Model):
         ('bkash', 'bKash'),
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     transaction_id = models.CharField(max_length=100, unique=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='initiated')
@@ -183,6 +175,9 @@ class Payment(models.Model):
     # bKash specific fields
     bkash_payment_id = models.CharField(max_length=100, null=True, blank=True)
     bkash_trx_id = models.CharField(max_length=100, null=True, blank=True)
+    # Settlement ledger tracking
+    paid_at = models.DateTimeField(null=True, blank=True)
+    settlement_appended = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -215,16 +210,95 @@ class BangladeshLocation(models.Model):
         ('district', 'District'),
         ('upazila', 'Upazila'),
         ('union', 'Union'),
-        ('ward', 'Ward'),
     )
+    geo_id = models.IntegerField(null=True, blank=True)
     name_en = models.CharField(max_length=200)
     name_bn = models.CharField(max_length=200)
     level = models.CharField(max_length=20, choices=LEVEL_CHOICES)
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    # Official reference coordinates (from districts.sql), read-only — NOT user input.
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    url = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['name_en']
+        constraints = [
+            models.UniqueConstraint(fields=['geo_id', 'level'], name='uniq_geo_level'),
+        ]
 
     def __str__(self):
         return f"{self.name_en} ({self.get_level_display()})"
+
+    def parent_chain(self):
+        """Return a dict of ancestor nodes by level (division/district/upazila/union)."""
+        chain = {}
+        node = self
+        while node:
+            chain[node.level] = node
+            node = node.parent
+        return chain
+
+
+class Area(models.Model):
+    name = models.CharField(max_length=200)
+    upazilas = models.ManyToManyField(
+        BangladeshLocation, related_name='areas',
+        limit_choices_to={'level': 'upazila'})
+    threshold_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} (threshold {self.threshold_kg}kg)"
+
+
+class PendingPool(models.Model):
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='pools')
+    union = models.ForeignKey(
+        BangladeshLocation, on_delete=models.CASCADE, related_name='pools')
+    product_type = models.ForeignKey(ProductType, on_delete=models.CASCADE, related_name='pools')
+    pending_quantity_kg = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('area', 'union', 'product_type')
+
+
+class Batch(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('assigned', 'Assigned'),
+        ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled'),
+    )
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='batches')
+    union = models.ForeignKey(BangladeshLocation, on_delete=models.PROTECT, related_name='batches')
+    product_type = models.ForeignKey(ProductType, on_delete=models.PROTECT, related_name='batches')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    deliveryman = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='batches', limit_choices_to={'role': 'deliveryman'})
+    total_quantity_kg = models.DecimalField(max_digits=12, decimal_places=2)
+    total_value = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Batch #{self.id} ({self.union}, {self.get_status_display()})"
+
+
+class BatchItem(models.Model):
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name='items')
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name='batch_items')
+    quantity_kg = models.DecimalField(max_digits=10, decimal_places=2)
+    farmer = models.ForeignKey(User, on_delete=models.PROTECT, related_name='batch_items')
+
+    def __str__(self):
+        return f"BatchItem for Order #{self.order_id} in Batch #{self.batch_id}"

@@ -22,6 +22,7 @@ export default function PaymentScreen() {
   const { items, clear } = useCart();
   const [loading, setLoading] = useState(false);
   const [bkashLoading, setBkashLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<{
     transaction_id: string;
     bkash_url: string;
@@ -60,6 +61,30 @@ export default function PaymentScreen() {
       Alert.alert('Order failed', msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const payViaDemo = async () => {
+    if (!token) return;
+    setDemoLoading(true);
+    try {
+      console.log('[PAYMENT] Placing order with DEMO payment for total:', total);
+      const bulkItems = items.map((item) => ({
+        post: item.post.id,
+        quantity_kg: item.quantityKg.toFixed(2),
+      }));
+      await api.demoPay(token, bulkItems, address || 'Dhaka');
+      clear();
+      await refreshProfile();
+      Alert.alert('Order placed', 'Your order has been placed successfully with demo payment.', [
+        { text: 'View Orders', onPress: () => router.replace('/(customer)/orders') },
+        { text: 'OK', style: 'cancel' },
+      ]);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Order failed';
+      Alert.alert('Order failed', msg);
+    } finally {
+      setDemoLoading(false);
     }
   };
 
@@ -194,15 +219,23 @@ export default function PaymentScreen() {
         <View style={styles.paymentOptions}>
           <Text style={styles.paymentOptionsTitle}>Payment via bKash</Text>
 
-          {!paymentResult ? (
-            <PrimaryButton
-              title="Pay with bKash"
-              onPress={payViaBkash}
-              loading={bkashLoading}
-              variant="sage"
-              style={styles.payBtn}
-            />
-          ) : (
+          <PrimaryButton
+            title="Pay with bKash"
+            onPress={payViaBkash}
+            loading={bkashLoading}
+            variant="sage"
+            style={styles.payBtn}
+          />
+
+          <PrimaryButton
+            title="Demo Pay (auto-accept)"
+            onPress={payViaDemo}
+            loading={demoLoading}
+            variant="secondary"
+            style={styles.payBtn}
+          />
+
+          {paymentResult && (
             <>
               <Text style={styles.paymentPendingText}>
                 bKash payment page opened in your browser.{'\n'}

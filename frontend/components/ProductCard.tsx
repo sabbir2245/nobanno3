@@ -42,6 +42,16 @@ export function ProductCard({ post, onPress, imageTint = Colors.lightGreen }: Pr
       <View style={styles.body}>
         <Text style={styles.title}>{post.title}</Text>
         <Text style={styles.farmer}>{post.farmer_name || post.farmer_username}</Text>
+        {post.location && (
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+            <Text style={styles.locationText}>
+              {[post.location.district, post.location.upazila, post.location.union]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+          </View>
+        )}
         <View style={styles.ratingRow}>
           {Array.from({ length: fullStars }).map((_, i) => (
             <Ionicons key={`full-${i}`} name="star" size={14} color={Colors.starGold} />
@@ -108,6 +118,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
     marginBottom: Spacing.xs,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: Spacing.xs,
+  },
+  locationText: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: Colors.textMuted,
+    flex: 1,
   },
   ratingRow: {
     flexDirection: 'row',

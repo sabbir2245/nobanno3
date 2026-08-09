@@ -24,7 +24,7 @@ import { useTranslation } from 'react-i18next';
 
 export default function CreatePostScreen() {
   const router = useRouter();
-  const { token, location, user } = useAuth();
+  const { token, user } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [totalWeight, setTotalWeight] = useState('');
@@ -69,8 +69,11 @@ export default function CreatePostScreen() {
       Alert.alert('Missing fields', 'Product name, quantity and price are required.');
       return;
     }
-    const lat = location?.latitude ?? user?.latitude ?? 23.81;
-    const lng = location?.longitude ?? user?.longitude ?? 90.41;
+    const farmerLocationId = user?.location?.id;
+    if (!farmerLocationId) {
+      Alert.alert('Location missing', 'Set your location in your profile before posting a listing.');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -79,8 +82,7 @@ export default function CreatePostScreen() {
         description,
         total_weight_kg: parseFloat(totalWeight),
         price_per_kg: parseFloat(pricePerKg),
-        latitude: lat,
-        longitude: lng,
+        location: farmerLocationId,
         product_type: productTypeId || undefined,
         imageUris: imageUris.length > 0 ? imageUris : undefined,
       });

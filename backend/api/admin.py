@@ -4,7 +4,7 @@ from django.db.models import Sum, Count
 from django.shortcuts import render
 from django.urls import path
 
-from .models import User, Post, PostImage, Order, Review, ReviewImage, ProductType, OTP, Payment, FarmerBankAccount, BangladeshLocation
+from .models import User, Post, PostImage, Order, Review, ReviewImage, ProductType, OTP, Payment, FarmerBankAccount, BangladeshLocation, Area, PendingPool, Batch, BatchItem
 
 
 class CustomUserAdmin(UserAdmin):
@@ -13,7 +13,7 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ('username', 'email', 'phone_number')
     fieldsets = UserAdmin.fieldsets + (
         ('Custom Fields', {'fields': ('role', 'name', 'phone_number', 'address',
-                                       'latitude', 'longitude', 'is_verified',
+                                       'location', 'is_verified',
                                        'average_rating', 'ratings_count', 'service_areas')}),
     )
 
@@ -54,6 +54,37 @@ class OrderAdmin(admin.ModelAdmin):
     post_title.short_description = 'Product'
 
 
+@admin.register(Area)
+class AreaAdmin(admin.ModelAdmin):
+    list_display = ('name', 'threshold_kg', 'upazila_count', 'is_active', 'updated_at')
+    list_editable = ('threshold_kg', 'is_active')
+    filter_horizontal = ('upazilas',)
+    search_fields = ('name',)
+
+    def upazila_count(self, obj):
+        return obj.upazilas.count()
+    upazila_count.short_description = 'Upazilas'
+
+
+class BatchItemInline(admin.TabularInline):
+    model = BatchItem
+    extra = 0
+
+
+@admin.register(Batch)
+class BatchAdmin(admin.ModelAdmin):
+    list_display = ('id', 'union', 'product_type', 'area', 'status', 'total_quantity_kg',
+                    'total_value', 'deliveryman', 'created_at')
+    list_filter = ('status', 'product_type', 'created_at')
+    search_fields = ('union__name_en',)
+    inlines = [BatchItemInline]
+
+
+@admin.register(PendingPool)
+class PendingPoolAdmin(admin.ModelAdmin):
+    list_display = ('area', 'union', 'product_type', 'pending_quantity_kg', 'updated_at')
+
+
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
     list_display = ('id', 'customer', 'post', 'rating', 'created_at')
@@ -65,10 +96,40 @@ admin.site.register(OTP)
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('transaction_id', 'user', 'amount', 'status', 'gateway', 'bkash_trx_id', 'created_at')
-    list_filter = ('status', 'gateway', 'created_at')
-    search_fields = ('transaction_id', 'user__username')
-    readonly_fields = ('transaction_id', 'user', 'amount', 'gateway_response', 'created_at', 'updated_at')
+    list_display = ('transaction_id', 'user', 'order', 'amount', 'status', 'gateway', 'bkash_trx_id', 'paid_at', 'settlement_appended', 'created_at')
+    list_filter = ('status', 'gateway', 'settlement_appended', 'created_at')
+    search_fields = ('transaction_id', 'user__username', 'order__id')
+    readonly_fields = ('transaction_id', 'user', 'order', 'amount', 'gateway_response', 'created_at', 'updated_at')
+    actions = ['download_settlement_xlsx']
+    change_list_template = "admin/api/payment/change_list.html"
+
+    @admin.action(description="Download Settlement XLSX")
+    def download_settlement_xlsx(self, request, queryset):
+        from django.shortcuts import redirect
+        return redirect('admin:settlement_xlsx')
+
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'settlement-xlsx/',
+                self.admin_site.admin_view(self._settlement_xlsx_view),
+                name='settlement_xlsx',
+            ),
+        ]
+        return custom_urls + urls
+
+    def _settlement_xlsx_view(self, request):
+        from django.http import FileResponse
+        from .payments import _rebuild_settlement_xlsx
+        path = _rebuild_settlement_xlsx()
+        resp = FileResponse(
+            open(path, 'rb'),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        resp["Content-Disposition"] = 'attachment; filename="admin_settlement.xlsx"'
+        return resp
 
 
 @admin.register(FarmerBankAccount)
@@ -115,7 +176,6 @@ def admin_stats_view(request):
         'type_stats': type_stats,
         'order_counts': {
             'pending': Order.objects.filter(status='pending').count(),
-            'shipped': Order.objects.filter(status='shipped').count(),
             'completed': Order.objects.filter(status='completed').count(),
             'cancelled': Order.objects.filter(status='cancelled').count(),
         },

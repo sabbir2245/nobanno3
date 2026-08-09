@@ -19,7 +19,6 @@ export default function FarmerOrdersScreen() {
   const { t } = useTranslation();
   const [orders, setOrders] = useState<Order[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [shippingId, setShippingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -39,21 +38,10 @@ export default function FarmerOrdersScreen() {
     setRefreshing(false);
   };
 
-  const shipOrder = async (orderId: number) => {
-    if (!token) return;
-    setShippingId(orderId);
-    try {
-      await api.shipOrder(token, orderId);
-      await load();
-    } finally {
-      setShippingId(null);
-    }
-  };
-
   const variantFor = (status: Order['status']) => {
-    if (status === 'pending') return 'paid' as const;
-    if (status === 'shipped') return 'shipped' as const;
-    return 'completed' as const;
+    if (status === 'pending') return 'pending' as const;
+    if (status === 'completed') return 'completed' as const;
+    return 'cancelled' as const;
   };
 
   return (
@@ -71,20 +59,11 @@ export default function FarmerOrdersScreen() {
           {orders.length === 0 ? (
             <Text style={styles.empty}>{t('এখনো কোনো অর্ডার পাওয়া যায়নি।')}</Text>
           ) : (
-            orders.map((order) => (
+orders.map((order) => (
               <OrderCard
                 key={order.id}
                 order={order}
                 variant={variantFor(order.status)}
-                actionLabel={
-                  order.status === 'pending' ? t('পাঠানো হয়েছে চিহ্নিত করুন') : undefined
-                }
-                onAction={
-                  order.status === 'pending'
-                    ? () => shipOrder(order.id)
-                    : undefined
-                }
-                actionLoading={shippingId === order.id}
               />
             ))
           )}

@@ -125,7 +125,7 @@ python manage.py test api
 ### Seed Credentials
 | Role | Username | Password |
 |------|----------|----------|
-| Admin | `admin` | `Adminpassword123` |
+| Admin | `admin` | `mik` |
 | Farmer | `farmer_jamal` | `farmerpassword123` |
 | Customer | `customer_sadia` | `customerpassword123` |
 

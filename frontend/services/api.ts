@@ -20,6 +20,7 @@ export interface User {
   total_sales: string | null;
   profile_picture: string | null;
   service_areas: number[] | null;
+  location?: LocationInfo;
   division: string;
   district: string;
   upazila: string;
@@ -61,6 +62,7 @@ export interface Post {
   distance_km?: number;
   created_at: string;
   image: string | null ;
+  location?: LocationInfo;
   collection_district: string;
   collection_upazila: string;
   collection_union: string;
@@ -73,26 +75,17 @@ export interface Order {
   customer: number;
   post: number;
   quantity_kg: string;
-  status: 'pending' | 'shipped' | 'assigned' | 'out_for_delivery' | 'completed' | 'cancelled';
+  status: 'pending' | 'completed' | 'cancelled';
   total_paid: string;
   platform_fee: string;
   farmer_payout: string;
   delivery_address: string;
-  deliveryman: number | null;
-  deliveryman_name: string | null;
-  deliveryman_username: string | null;
-  deliveryman_phone: string | null;
   post_title: string;
   post_farmer_name: string;
   post_farmer_id: number;
   post_farmer_phone: string;
-  post_collection_district: string;
-  post_collection_upazila: string;
-  post_collection_union: string;
-  post_collection_ward: string;
+  post_location?: LocationInfo;
   post_collection_point_address: string;
-  post_latitude: number;
-  post_longitude: number;
   customer_username: string;
   customer_name: string;
   customer_phone: string;
@@ -149,6 +142,56 @@ export interface DeliverymanPackage {
     collection_ward: string;
     collection_point_address: string;
   }>;
+}
+
+export interface Area {
+  id: number;
+  name: string;
+  upazilas: number[];
+  threshold_kg: string;
+  is_active: boolean;
+}
+
+export interface LocationInfo {
+  id: number;
+  level: string;
+  name_en: string;
+  name_bn: string;
+  division: string | null;
+  district: string | null;
+  upazila: string | null;
+  union: string | null;
+}
+
+export interface BatchItem {
+  id: number;
+  order: number;
+  post_title: string;
+  quantity_kg: string;
+  farmer: number;
+  farmer_name: string;
+  farmer_phone: string;
+  order_status: string;
+  collection_point_address: string | null;
+}
+
+export interface Batch {
+  id: number;
+  area: Area;
+  union: LocationInfo;
+  product_type: number | null;
+  product_type_name_en: string | null;
+  product_type_name_bn: string | null;
+  status: 'pending' | 'assigned' | 'delivered' | 'cancelled';
+  deliveryman: number | null;
+  deliveryman_name: string | null;
+  deliveryman_phone: string | null;
+  total_quantity_kg: string;
+  total_value: string;
+  items: BatchItem[];
+  created_at: string;
+  assigned_at: string | null;
+  delivered_at: string | null;
 }
 
 class ApiError extends Error {
@@ -224,8 +267,7 @@ export const api = {
     name?: string;
     phone_number?: string;
     address?: string;
-    latitude?: number;
-    longitude?: number;
+    location: number;
   }) =>
     request<{ token: string; user: User }>('/auth/register/', {
       method: 'POST',
@@ -250,13 +292,11 @@ export const api = {
 
   getPosts: (
     token: string | null,
-    params?: { search?: string; lat?: number; lng?: number; radius?: number; farmer_id?: number; product_type?: number },
+    params?: { search?: string; union?: number; farmer_id?: number; product_type?: number },
   ) => {
     const query = new URLSearchParams();
     if (params?.search) query.set('search', params.search);
-    if (params?.lat) query.set('lat', String(params.lat));
-    if (params?.lng) query.set('lng', String(params.lng));
-    if (params?.radius) query.set('radius', String(params.radius));
+    if (params?.union) query.set('union', String(params.union));
     if (params?.farmer_id) query.set('farmer_id', String(params.farmer_id));
     if (params?.product_type) query.set('product_type', String(params.product_type));
     const qs = query.toString();
@@ -265,12 +305,11 @@ export const api = {
 
   searchByKeyword: (
     q: string,
-    lat: number,
-    lng: number,
+    unionId: number,
     token?: string | null,
   ) =>
     request<Post[]>(
-      `/posts/search_by_keyword/?q=${encodeURIComponent(q)}&lat=${lat}&lng=${lng}`,
+      `/posts/search_by_keyword/?q=${encodeURIComponent(q)}&union=${unionId}`,
       { method: 'GET' },
       token,
     ),
@@ -288,8 +327,7 @@ export const api = {
       description: string;
       total_weight_kg: number;
       price_per_kg: number;
-      latitude: number;
-      longitude: number;
+      location: number;
       product_type?: number;
       imageUris?: string[];
     },
@@ -301,8 +339,7 @@ export const api = {
       formData.append('description', body.description);
       formData.append('total_weight_kg', body.total_weight_kg.toString());
       formData.append('price_per_kg', body.price_per_kg.toString());
-      formData.append('latitude', body.latitude.toString());
-      formData.append('longitude', body.longitude.toString());
+      formData.append('location', body.location.toString());
       if (body.product_type) formData.append('product_type', String(body.product_type));
       for (const uri of (body.imageUris || []).slice(0, 3)) {
         const filename = uri.split('/').pop() || 'image.jpg';
@@ -348,29 +385,8 @@ export const api = {
       token,
     ),
 
-  shipOrder: (token: string, orderId: number) =>
-    request<Order>(`/orders/${orderId}/ship/`, { method: 'POST' }, token),
-
-  acceptOrder: (token: string, orderId: number) =>
-    request<Order>(`/orders/${orderId}/accept/`, { method: 'POST' }, token),
-
-  pickupOrder: (token: string, orderId: number) =>
-    request<Order>(`/orders/${orderId}/pickup/`, { method: 'POST' }, token),
-
-  deliverOrder: (token: string, orderId: number) =>
-    request<Order>(`/orders/${orderId}/deliver/`, { method: 'POST' }, token),
-
   completeOrder: (token: string, orderId: number) =>
     request<Order>(`/orders/${orderId}/complete/`, { method: 'POST' }, token),
-
-  getAvailableOrders: (token: string, params?: { lat?: number; lng?: number; radius?: number }) => {
-    const query = new URLSearchParams();
-    if (params?.lat) query.set('lat', String(params.lat));
-    if (params?.lng) query.set('lng', String(params.lng));
-    if (params?.radius) query.set('radius', String(params.radius));
-    const qs = query.toString();
-    return request<Order[]>(`/orders/available/${qs ? `?${qs}` : ''}`, { method: 'GET' }, token);
-  },
 
   createBulkOrders: (token: string, items: { post: number; quantity_kg: string }[], delivery_address: string) =>
     request<Order[]>(
@@ -454,7 +470,7 @@ export const api = {
       recent_transactions: Order[];
     }>('/farmer/wallet/', { method: 'GET' }, token),
 
-  updateProfileInfo: (token: string, body: Partial<Pick<User, 'name' | 'phone_number' | 'address' | 'email' | 'latitude' | 'longitude' | 'profile_picture'>>) =>
+  updateProfileInfo: (token: string, body: Partial<Pick<User, 'name' | 'phone_number' | 'address' | 'email' | 'latitude' | 'longitude' | 'profile_picture'>> & { location?: number }) =>
     request<User>(
       '/profile/update/',
       { method: 'PATCH', body: JSON.stringify(body) },
@@ -462,14 +478,19 @@ export const api = {
     ),
 
   // ── BKASH PAYMENT API ──────────────────────────────────────────────────
-  initiateBkashPayment: (token: string, amount: number) =>
+  initiateBkashPayment: (token: string, amount: number, orderId?: number) =>
     request<{
       payment_id: number;
+      order_id: number | null;
       transaction_id: string;
       bkash_url: string;
       payment_id_bkash: string;
       amount: string;
-    }>('/payments/bkash/initiate/', { method: 'POST', body: JSON.stringify({ amount }) }, token),
+    }>(
+      '/payments/bkash/initiate/',
+      { method: 'POST', body: JSON.stringify({ amount, ...(orderId ? { order_id: orderId } : {}) }) },
+      token,
+    ),
 
   getBkashPaymentStatus: (token: string, transactionId: string) =>
     request<{
@@ -482,24 +503,25 @@ export const api = {
       created_at: string;
     }>(`/payments/bkash/status/${transactionId}/`, { method: 'GET' }, token),
 
-  // ── DELIVERYMAN API ────────────────────────────────────────────────────
-  getDeliverymanDashboard: (token: string, params?: {
-    lat?: number;
-    lng?: number;
-    radius?: number;
-    tab?: 'available' | 'my-deliveries';
-  }) => {
-    const query = new URLSearchParams();
-    if (params?.lat) query.set('lat', String(params.lat));
-    if (params?.lng) query.set('lng', String(params.lng));
-    if (params?.radius) query.set('radius', String(params.radius));
-    if (params?.tab) query.set('tab', params.tab);
-    const qs = query.toString();
-    return request<{
-      orders: Order[];
-      package_summary: DeliverymanPackage;
-    }>(`/deliveryman/dashboard/${qs ? `?${qs}` : ''}`, { method: 'GET' }, token);
-  },
+  demoPay: (token: string, items: { post: number; quantity_kg: string }[], deliveryAddress: string) =>
+    request<Order[]>(
+      '/payments/demo/',
+      { method: 'POST', body: JSON.stringify({ items, delivery_address: deliveryAddress }) },
+      token,
+    ),
+
+  // ── DELIVERYMAN API (union Batch-based) ─────────────────────────────────
+  getAvailableBatches: (token: string) =>
+    request<Batch[]>('/batches/available/', { method: 'GET' }, token),
+
+  getMyBatches: (token: string) =>
+    request<Batch[]>('/batches/mine/', { method: 'GET' }, token),
+
+  acceptBatch: (token: string, batchId: number) =>
+    request<Batch>(`/batches/${batchId}/accept/`, { method: 'POST' }, token),
+
+  deliverBatch: (token: string, batchId: number) =>
+    request<Batch>(`/batches/${batchId}/deliver/`, { method: 'POST' }, token),
 
   getServiceAreas: (token: string) =>
     request<{ service_areas: number[] }>('/deliveryman/service-areas/', { method: 'GET' }, token),
@@ -518,6 +540,9 @@ export const api = {
     const qs = query.toString();
     return request<BangladeshLocation[]>(`/locations/${qs ? `?${qs}` : ''}`, { method: 'GET' });
   },
+
+  getAreas: () =>
+    request<Area[]>('/areas/', { method: 'GET' }),
 
   // ── SSLCOMMERZ (deprecated — kept for backward compatibility) ──────────
   initiatePayment: (token: string, amount: number) =>
@@ -547,8 +572,7 @@ export const api = {
       description?: string;
       total_weight_kg?: number;
       price_per_kg?: number;
-      latitude?: number;
-      longitude?: number;
+      location?: number;
       product_type?: number;
       imageUris?: string[];
     },
@@ -560,8 +584,7 @@ export const api = {
       if (body.description) formData.append('description', body.description);
       if (body.total_weight_kg) formData.append('total_weight_kg', body.total_weight_kg.toString());
       if (body.price_per_kg) formData.append('price_per_kg', body.price_per_kg.toString());
-      if (body.latitude) formData.append('latitude', body.latitude.toString());
-      if (body.longitude) formData.append('longitude', body.longitude.toString());
+      if (body.location) formData.append('location', body.location.toString());
       if (body.product_type) formData.append('product_type', String(body.product_type));
       for (const uri of (body.imageUris || []).slice(0, 3)) {
         const filename = uri.split('/').pop() || 'image.jpg';

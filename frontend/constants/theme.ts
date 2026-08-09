@@ -13,6 +13,7 @@ export const Colors = {
   textMuted: '#5C5C5C',
   border: '#C5C5C5',
   starGold: '#D4A017',
+  red: '#D14343',
   cardShadow: 'rgba(27, 67, 50, 0.12)',
 };
 

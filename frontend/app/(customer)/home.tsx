@@ -21,7 +21,7 @@ const imageTints = [Colors.lightGreen, '#FFE4C4', Colors.paleYellow, Colors.sage
 
 export default function CustomerHomeScreen() {
   const router = useRouter();
-  const { token, location } = useAuth();
+  const { token, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [search, setSearch] = useState('');
@@ -37,22 +37,13 @@ export default function CustomerHomeScreen() {
   }, [token]);
 
   const loadPosts = useCallback(async () => {
-    if (!token || !location) return;
+    if (!token || !user?.location) return;
     try {
       let data: Post[];
       if (search.trim()) {
-        data = await api.searchByKeyword(
-          search.trim(),
-          location.latitude,
-          location.longitude,
-          token,
-        );
+        data = await api.searchByKeyword(search.trim(), user.location.id, token);
       } else {
-        data = await api.getPosts(token, {
-          lat: location.latitude,
-          lng: location.longitude,
-          radius: 200,
-        });
+        data = await api.getPosts(token, { union: user.location.id });
       }
       if (selectedTypeId) {
         data = data.filter((p) => p.product_type === selectedTypeId);
@@ -61,7 +52,7 @@ export default function CustomerHomeScreen() {
     } catch {
       setPosts([]);
     }
-  }, [token, location, search, selectedTypeId]);
+  }, [token, user, search, selectedTypeId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -99,7 +90,9 @@ export default function CustomerHomeScreen() {
           <View>
             <Text style={styles.delivering}>Delivering to</Text>
             <Text style={styles.location}>
-              {location?.label ?? 'Your location'}
+              {user?.location
+                ? [user.location.union, user.location.upazila, user.location.district].filter(Boolean).join(', ')
+                : 'Your location'}
             </Text>
           </View>
           <TouchableOpacity

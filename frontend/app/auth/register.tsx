@@ -15,6 +15,7 @@ import { useRouter, Link } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import CascadingLocationPicker from '@/components/CascadingLocationPicker';
 import { ApiError } from '@/services/api';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { authStyles } from '@/styles/global';
@@ -39,6 +40,7 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [locationId, setLocationId] = useState<number | null>(null);
 
   const roleOptions = [
     { label: 'কৃষক', value: 'farmer' },
@@ -64,6 +66,11 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (!locationId) {
+      Alert.alert('এলাকা নির্বাচন করুন', 'আপনার ইউনিয়ন/উপজেলা নির্বাচন করা আবশ্যক।');
+      return;
+    }
+
     if (form.password.length < 8) {
       Alert.alert('পাসওয়ার্ড সমস্যা', 'পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে।');
       return;
@@ -76,7 +83,7 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      await register({ ...form, role: form.role as any });
+      await register({ ...form, role: form.role as any, location: locationId });
       Alert.alert('অ্যাকাউন্ট তৈরি হয়েছে', 'আপনার নতুন অ্যাকাউন্ট দিয়ে লগইন করুন।', [
         { text: 'ঠিক আছে', onPress: () => router.replace('/auth/login') },
       ]);
@@ -203,6 +210,14 @@ export default function RegisterScreen() {
           value={form.address}
           onChangeText={(v) => update('address', v)}
           placeholder="ডেলিভারি / খামারের ঠিকানা"
+        />
+
+        <Text style={styles.label}>আপনার এলাকা নির্বাচন করুন (ইউনিয়ন/উপজেলা)</Text>
+        <CascadingLocationPicker
+          onLocationSelected={(sel) => {
+            const id = sel.union?.id ?? sel.upazila?.id ?? null;
+            setLocationId(id);
+          }}
         />
 
         <Text style={styles.label}>পাসওয়ার্ড</Text>

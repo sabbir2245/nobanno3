@@ -51,20 +51,9 @@ export default function CustomerOrdersScreen() {
     setRefreshing(false);
   };
 
-  const completeOrder = async (orderId: number) => {
-    if (!token) return;
-    try {
-      await api.completeOrder(token, orderId);
-      await load();
-      Alert.alert('Delivery confirmed', 'Order marked as completed.');
-    } catch {
-      Alert.alert('Error', 'Could not complete order.');
-    }
-  };
-
   const sorted = [...orders].sort((a, b) => {
     if (sortMode === 'status') {
-      const statusOrder = { pending: 0, shipped: 1, completed: 2, cancelled: 3 };
+      const statusOrder = { pending: 0, completed: 1, cancelled: 2 };
       return statusOrder[a.status] - statusOrder[b.status];
     }
     const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -107,7 +96,7 @@ export default function CustomerOrdersScreen() {
         ) : (
           sorted.map((order) => {
             const statusColors: Record<string, string> = {
-              pending: Colors.paleYellow, shipped: Colors.lightOrange,
+              pending: Colors.paleYellow,
               completed: Colors.paleGreen, cancelled: '#f0d0d0',
             };
             return (
@@ -121,12 +110,24 @@ export default function CustomerOrdersScreen() {
                 <Text style={styles.productTitle}>{order.post_title}</Text>
                 <Text style={styles.detail}>{parseFloat(order.quantity_kg).toFixed(0)} kg · ৳ {parseFloat(order.total_paid).toFixed(0)}</Text>
                 <Text style={styles.farmer}>Farmer: {order.post_farmer_name}</Text>
+                {(order.post_location || order.post_collection_point_address) && (
+                  <View style={styles.pickRow}>
+                    <Ionicons name="flag-outline" size={13} color={Colors.darkGreen} />
+                    <Text style={styles.pickText}>
+                      {order.post_collection_point_address
+                        ? `Pick at ${order.post_collection_point_address}`
+                        : ''}
+                      {order.post_collection_point_address && order.post_location ? ' · ' : ''}
+                      {order.post_location
+                        ? [order.post_location.district, order.post_location.upazila, order.post_location.union]
+                            .filter(Boolean)
+                            .join(', ')
+                        : ''}
+                    </Text>
+                  </View>
+                )}
                 <Text style={styles.date}>{new Date(order.created_at).toLocaleDateString('en-GB')}</Text>
                 <View style={styles.actions}>
-                  {order.status === 'shipped' && (
-                    <PrimaryButton title="Confirm Delivery" onPress={() => completeOrder(order.id)}
-                      variant="sage" style={styles.actionBtn} />
-                  )}
                   {order.status === 'completed' && !reviewedPostIds.has(order.post) && (
                     <PrimaryButton title="Write a Review"
                       onPress={() => setReviewTarget({ postId: order.post, postTitle: order.post_title })}
@@ -168,6 +169,12 @@ const styles = StyleSheet.create({
   detail: { fontFamily: Fonts.regular, fontSize: 13, color: Colors.textMuted, marginTop: 2 },
   farmer: { fontFamily: Fonts.regular, fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   date: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted, marginTop: 2 },
+  pickRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    marginTop: Spacing.xs, backgroundColor: Colors.paleGreen,
+    borderRadius: Radius.sm, padding: Spacing.sm,
+  },
+  pickText: { fontFamily: Fonts.regular, fontSize: 12, color: Colors.darkGreen, flex: 1 },
   actions: { marginTop: Spacing.sm },
   actionBtn: { width: '100%' },
   reviewDone: { backgroundColor: Colors.paleGreen, borderRadius: Radius.pill, paddingHorizontal: Spacing.sm, paddingVertical: 4, alignSelf: 'flex-start' },

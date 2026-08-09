@@ -162,6 +162,9 @@ CLOUDFLARE_TUNNEL_URL = os.environ.get('CLOUDFLARE_TUNNEL_URL')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'timage'
 
+# Settlement xlsx ledger (appended when a customer payment is marked successful)
+SETTLEMENT_XLSX_PATH = BASE_DIR / 'settlements' / 'admin_settlement.xlsx'
+
 # ── Jazzmin Admin Theme ───────────────────────────────────────────────────
 
 JAZZMIN_SETTINGS = {

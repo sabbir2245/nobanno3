@@ -5,6 +5,9 @@ import hashlib
 import requests
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
+from pathlib import Path
+
+import openpyxl
 
 from django.conf import settings
 from django.http import HttpResponse
@@ -234,7 +237,7 @@ def generate_transaction_id(user_id):
 class BKashPaymentInitiateView(APIView):
     """
     POST /api/payments/bkash/initiate/
-    Body: { amount: number }
+    Body: { amount: number, order_id?: number }
     Initiates a bKash payment session. Returns bkashURL to redirect customer.
     """
     permission_classes = [permissions.IsAuthenticated]
@@ -252,8 +255,18 @@ class BKashPaymentInitiateView(APIView):
         except (ValueError, InvalidOperation):
             return Response({"error": "Amount must be a positive number."}, status=status.HTTP_400_BAD_REQUEST)
 
+        order = None
+        order_id = request.data.get("order_id")
+        if order_id:
+            try:
+                order = Order.objects.select_for_update().get(pk=order_id)
+            except Order.DoesNotExist:
+                return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+            if order.customer != request.user and not (request.user.is_staff or request.user.role == 'admin'):
+                return Response({"error": "You do not own this order."}, status=status.HTTP_403_FORBIDDEN)
+
         tran_id = generate_transaction_id(request.user.id)
-        print(f"[BKASH INITIATE] Transaction ID: {tran_id}, Amount: {amount}")
+        print(f"[BKASH INITIATE] Transaction ID: {tran_id}, Amount: {amount}, order_id={order_id}")
 
         try:
             result = bkash_create_payment(
@@ -267,6 +280,7 @@ class BKashPaymentInitiateView(APIView):
 
         payment = Payment.objects.create(
             user=request.user,
+            order=order,
             amount=amount,
             transaction_id=tran_id,
             status="initiated",
@@ -278,6 +292,7 @@ class BKashPaymentInitiateView(APIView):
 
         return Response({
             "payment_id": payment.id,
+            "order_id": order.id if order else None,
             "transaction_id": tran_id,
             "bkash_url": result.get("bkashURL"),
             "payment_id_bkash": result.get("paymentID"),
@@ -344,12 +359,10 @@ class BKashPaymentCallbackView(APIView):
             amount = result.get("amount")
             print(f"[BKASH CALLBACK] Payment COMPLETED. trxID={trx_id}, amount={amount}")
 
-            Payment.objects.filter(bkash_payment_id=payment_id).update(
-                status="success",
-                bkash_trx_id=trx_id,
-                gateway_response=result,
-            )
-            print(f"[BKASH CALLBACK] Payment record updated to success")
+            pay = Payment.objects.filter(bkash_payment_id=payment_id).first()
+            if pay:
+                _finalize_payment(pay, trx_id=trx_id, gateway_response=result)
+                print(f"[BKASH CALLBACK] Payment record updated to success (settlement_appended={pay.settlement_appended})")
             return HttpResponse("Payment successful! You can close this page.", status=200)
         else:
             print(f"[BKASH CALLBACK] Execute returned non-success: {json.dumps(result)}")
@@ -359,11 +372,9 @@ class BKashPaymentCallbackView(APIView):
                 if status_check.get("transactionStatus") == "Completed":
                     trx_id = status_check.get("trxID")
                     amount = status_check.get("amount")
-                    Payment.objects.filter(bkash_payment_id=payment_id).update(
-                        status="success",
-                        bkash_trx_id=trx_id,
-                        gateway_response=status_check,
-                    )
+                    pay = Payment.objects.filter(bkash_payment_id=payment_id).first()
+                    if pay:
+                        _finalize_payment(pay, trx_id=trx_id, gateway_response=status_check)
                     print(f"[BKASH CALLBACK] Query fallback confirmed payment completed")
                     return HttpResponse("Payment successful! You can close this page.", status=200)
             except Exception as e:
@@ -386,7 +397,9 @@ class BKashPaymentSuccessView(APIView):
         tran_id = request.data.get("transaction_id")
         print(f"[BKASH SUCCESS] transaction_id={tran_id}")
         if tran_id:
-            Payment.objects.filter(transaction_id=tran_id).update(status="success")
+            pay = Payment.objects.filter(transaction_id=tran_id).first()
+            if pay:
+                _finalize_payment(pay)
         return Response({"status": "success", "message": "Payment marked successful.", "transaction_id": tran_id})
 
 
@@ -426,19 +439,13 @@ class BKashPaymentStatusView(APIView):
                 # First attempt to execute the payment (user completed OTP/PIN on bKash side)
                 result = bkash_execute_payment(payment.bkash_payment_id)
                 if result.get("statusCode") == "0000" and result.get("transactionStatus") == "Completed":
-                    payment.status = "success"
-                    payment.bkash_trx_id = result.get("trxID")
-                    payment.gateway_response = result
-                    payment.save()
+                    _finalize_payment(payment, trx_id=result.get("trxID"), gateway_response=result)
                     print(f"[BKASH STATUS] Execute + reconciled: success, trx={result.get('trxID')}")
                 else:
                     # Execute didn't complete, fall back to query
                     result = bkash_query_payment(payment.bkash_payment_id)
                     if result.get("transactionStatus") == "Completed":
-                        payment.status = "success"
-                        payment.bkash_trx_id = result.get("trxID")
-                        payment.gateway_response = result
-                        payment.save()
+                        _finalize_payment(payment, trx_id=result.get("trxID"), gateway_response=result)
                         print(f"[BKASH STATUS] Query reconciled: success, trx={result.get('trxID')}")
                     elif result.get("transactionStatus") in ("Failed", "Cancelled"):
                         payment.status = "failed"
@@ -450,10 +457,7 @@ class BKashPaymentStatusView(APIView):
                 try:
                     result = bkash_query_payment(payment.bkash_payment_id)
                     if result.get("transactionStatus") == "Completed":
-                        payment.status = "success"
-                        payment.bkash_trx_id = result.get("trxID")
-                        payment.gateway_response = result
-                        payment.save()
+                        _finalize_payment(payment, trx_id=result.get("trxID"), gateway_response=result)
                         print(f"[BKASH STATUS] Query reconciled after execute fail: success, trx={result.get('trxID')}")
                     elif result.get("transactionStatus") in ("Failed", "Cancelled"):
                         payment.status = "failed"
@@ -556,7 +560,7 @@ class BEFTNInvoiceView(APIView):
         to_date = request.query_params.get("to_date")
 
         orders = Order.objects.filter(
-            status__in=["completed", "shipped"],
+            status__in=["completed"],
         ).select_related("post__farmer", "post__product_type").order_by("created_at")
 
         if from_date:
@@ -647,6 +651,149 @@ class BEFTNInvoiceView(APIView):
         response = HttpResponse(csv_content, content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="beftn_invoice_{datetime.now().strftime("%Y%m%d")}.csv"'
         return response
+
+
+# =============================================================================
+# SETTLEMENT XLSX LEDGER — one row per successfully paid, order-linked payment
+# =============================================================================
+# Columns: Account Number, Farmer Name, Amount (90%), Payment Type,
+#          Reference (Order ID), Contact (Phone)
+# =============================================================================
+
+SETTLEMENT_HEADERS = [
+    "Account Number",
+    "Farmer Name",
+    "Amount (90%)",
+    "Payment Type",
+    "Reference (Order ID)",
+    "Contact (Phone)",
+]
+
+
+def _settlement_path():
+    path = getattr(settings, 'SETTLEMENT_XLSX_PATH', None)
+    if path:
+        return Path(path)
+    return Path(settings.BASE_DIR) / 'settlements' / 'admin_settlement.xlsx'
+
+
+def _rebuild_settlement_xlsx():
+    """Rebuild the full settlement xlsx from every successful, order-linked
+    payment. This guarantees the file always exists and reflects current paid
+    orders, regardless of how payments were created (bKash or demo)."""
+    from .models import Payment, Order
+    path = _settlement_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Settlements"
+    ws.append(SETTLEMENT_HEADERS)
+
+    payments = (
+        Payment.objects
+        .filter(status='success', order__isnull=False)
+        .select_related('order__post__farmer')
+        .order_by('paid_at', 'id')
+    )
+
+    for payment in payments:
+        order = payment.order
+        if order is None or not order.post_id:
+            continue
+        farmer = order.post.farmer
+        bank = None
+        try:
+            bank = FarmerBankAccount.objects.get(farmer=farmer)
+        except FarmerBankAccount.DoesNotExist:
+            pass
+        ws.append([
+            bank.account_number if bank else '',
+            farmer.name or farmer.username,
+            float(order.farmer_payout),
+            (payment.gateway or 'bkash').upper(),
+            order.id,
+            farmer.phone_number or '',
+        ])
+
+    wb.save(path)
+    return path
+
+
+def _append_settlement_xlsx(payment):
+    """Append a farmer-payout row for a successfully paid, order-linked payment.
+
+    Creates the workbook with a header on first run, then appends one row per
+    order. Idempotency is enforced by the caller via `settlement_appended`.
+    """
+    order = payment.order
+    if order is None or not order.post_id:
+        return False
+
+    farmer = order.post.farmer
+    bank = None
+    try:
+        bank = FarmerBankAccount.objects.get(farmer=farmer)
+    except FarmerBankAccount.DoesNotExist:
+        pass
+
+    path = _settlement_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if path.exists():
+        wb = openpyxl.load_workbook(path)
+        ws = wb.active
+    else:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Settlements"
+        ws.append(SETTLEMENT_HEADERS)
+
+    ws.append([
+        bank.account_number if bank else '',
+        farmer.name or farmer.username,
+        float(order.farmer_payout),
+        (payment.gateway or 'bkash').upper(),
+        order.id,
+        farmer.phone_number or '',
+    ])
+    wb.save(path)
+    return True
+
+
+def _finalize_payment(payment, trx_id=None, gateway_response=None):
+    """Mark a payment successful and (once) append its settlement xlsx row."""
+    payment.status = 'success'
+    if trx_id:
+        payment.bkash_trx_id = trx_id
+    if gateway_response is not None:
+        payment.gateway_response = gateway_response
+    payment.paid_at = datetime.now()
+    if payment.order_id and not payment.settlement_appended:
+        if _append_settlement_xlsx(payment):
+            payment.settlement_appended = True
+    payment.save()
+
+
+class SettlementDownloadView(APIView):
+    """
+    GET /api/payments/settlement/download/
+    Admin-only. Rebuilds the settlement xlsx from all successful order-linked
+    payments and returns it as a downloadable file.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != "admin" and not request.user.is_staff:
+            return Response({"error": "Admin access required."}, status=status.HTTP_403_FORBIDDEN)
+        path = _rebuild_settlement_xlsx()
+        from django.http import FileResponse
+        resp = FileResponse(
+            open(path, 'rb'),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        resp["Content-Disposition"] = 'attachment; filename="admin_settlement.xlsx"'
+        return resp
 
 
 # =============================================================================

@@ -1,28 +1,45 @@
 from rest_framework import serializers, generics, permissions
 from rest_framework.exceptions import PermissionDenied
 from django.db.models import Sum
-from .models import User, Post
+from .models import User, Post, BangladeshLocation
 
 # ==========================================
 # 1. SERIALIZERS
 # ==========================================
 
 class UserUpdateSerializer(serializers.ModelSerializer):
+    location = serializers.PrimaryKeyRelatedField(
+        queryset=BangladeshLocation.objects.all(), required=False)
+
     class Meta:
         model = User
-        fields = ['name', 'phone_number', 'address', 'email', 'latitude', 'longitude', 'division', 'district', 'upazila', 'union']
-        
+        fields = ['name', 'phone_number', 'address', 'email', 'location']
+
     def validate_email(self, value):
         user = self.context['request'].user
         if User.objects.filter(email=value).exclude(pk=user.pk).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value
 
+    def validate_location(self, value):
+        if value.level not in ('union', 'upazila'):
+            raise serializers.ValidationError("location must be a Union or Upazila.")
+        return value
+
 
 class PostUpdateSerializer(serializers.ModelSerializer):
+    location = serializers.PrimaryKeyRelatedField(
+        queryset=BangladeshLocation.objects.all(), required=False)
+
     class Meta:
         model = Post
-        fields = ['title', 'description', 'image', 'image_url', 'total_weight_kg', 'price_per_kg', 'latitude', 'longitude']
+        fields = ['title', 'description', 'image', 'image_url', 'total_weight_kg',
+                  'price_per_kg', 'location', 'collection_point_address']
+
+    def validate_location(self, value):
+        if value.level not in ('union', 'upazila'):
+            raise serializers.ValidationError("location must be a Union or Upazila.")
+        return value
 
 
 # ==========================================

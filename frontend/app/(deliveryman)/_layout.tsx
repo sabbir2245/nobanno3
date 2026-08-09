@@ -39,6 +39,7 @@ export default function DeliverymanLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="service-areas" options={{ href: null }} />
     </Tabs>
   );
 }

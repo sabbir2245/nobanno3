@@ -22,7 +22,7 @@ npx expo start -c
 - **DB**: PostgreSQL by default. Set `USE_SQLITE=true` in `backend/.env` for SQLite. Tests always use in-memory SQLite.
 - **CORS**: All origins allowed.
 - **Tests**: `python manage.py test api`
-- **Seed creds**: Admin `admin` / `Adminpassword123`; farmers `farmer_jamal` / `farmerpassword123`; customers `customer_sadia` / `customerpassword123`. Full list in `backend/TESTING.md`.
+- **Seed creds**: Admin `admin` / `mik`; farmers `farmer_jamal` / `farmerpassword123`; customers `customer_sadia` / `customerpassword123`. Full list in `backend/TESTING.md`.
 - **Post model**: `total_weight_kg` is the stock field (no separate `available_weight_kg`).
 - **Order flow**: `pending → shipped → completed/cancelled`. `platform_fee` = 10% product cost, `farmer_payout` = 90%.
 - **Balance**: Not writable via API. Admin topup at `POST /api/users/<id>/topup/`.

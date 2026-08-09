@@ -1,21 +1,22 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Order } from '@/services/api';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 import { PrimaryButton } from './PrimaryButton';
 
 interface Props {
   order: Order;
-  variant: 'paid' | 'shipped' | 'completed';
+  variant: 'pending' | 'completed' | 'cancelled';
   onAction?: () => void;
   actionLabel?: string;
   actionLoading?: boolean;
 }
 
 const headerStyles = {
-  paid: { bg: Colors.paleYellow, text: Colors.textDark },
-  shipped: { bg: Colors.lightOrange, text: Colors.textDark },
+  pending: { bg: Colors.paleYellow, text: Colors.textDark },
   completed: { bg: Colors.darkGreen, text: Colors.white },
+  cancelled: { bg: '#f0d0d0', text: Colors.textDark },
 };
 
 export function OrderCard({
@@ -30,11 +31,11 @@ export function OrderCard({
   const pricePerKg = qty > 0 ? parseFloat(order.total_paid) / qty : 0;
 
   const headerTitle =
-    variant === 'paid'
+    variant === 'pending'
       ? 'গ্রাহকের অর্ডার — পরিশোধিত'
-      : variant === 'shipped'
-        ? 'অর্ডার প্রেরিত — ডেলিভারি নিশ্চিতকরণ অপেক্ষিত'
-        : 'অর্ডার ডেলিভারি সম্পন্ন';
+      : variant === 'completed'
+        ? 'অর্ডার ডেলিভারি সম্পন্ন'
+        : 'অর্ডার বাতিল';
 
   return (
     <View style={styles.card}>
@@ -47,17 +48,32 @@ export function OrderCard({
         <Text style={styles.detail}>
           {qty.toFixed(0)} কেজি @ ৳ {pricePerKg.toFixed(0)}/কেজি = ৳{' '}
           {parseFloat(order.total_paid).toFixed(0)}।{' '}
-          {order.status === 'pending' ? 'অপেক্ষমান' : order.status === 'shipped' ? 'প্রেরিত' : order.status === 'completed' ? 'সম্পন্ন' : 'বাতিল'}।
+          {order.status === 'pending'
+            ? 'অপেক্ষমান'
+            : order.status === 'completed'
+              ? 'সম্পন্ন'
+              : 'বাতিল'}।
         </Text>
-        {variant === 'shipped' && (
-          <Text style={styles.subDetail}>
-            গ্রাহকের নিশ্চিতকরণ অপেক্ষিত। ফারমার রেটিং অপেক্ষমান।
-          </Text>
-        )}
         {variant === 'completed' && (
           <Text style={styles.subDetail}>
-            গ্রাহক ডেলিভারি নিশ্চিত করেছেন। পেমেন্ট ওয়ালেটে জমা হয়েছে।
+            গ্রাহক ডেলিভারি নিশ্চিত করেছেন। পেমেন্ট ওয়ালেটে জমা হয়েছে।
           </Text>
+        )}
+        {(order.post_location || order.post_collection_point_address) && (
+          <View style={styles.pickRow}>
+            <Ionicons name="flag-outline" size={14} color={Colors.darkGreen} />
+            <Text style={styles.pickText}>
+              {order.post_collection_point_address
+                ? `উঠানোর স্থান: ${order.post_collection_point_address}`
+                : ''}
+              {order.post_collection_point_address && order.post_location ? ' · ' : ''}
+              {order.post_location
+                ? [order.post_location.district, order.post_location.upazila, order.post_location.union]
+                    .filter(Boolean)
+                    .join(', ')
+                : ''}
+            </Text>
+          </View>
         )}
         {onAction && actionLabel && (
           <PrimaryButton
@@ -116,6 +132,21 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: Spacing.xs,
     fontStyle: 'italic',
+  },
+  pickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: Spacing.sm,
+    backgroundColor: Colors.paleGreen,
+    borderRadius: Radius.sm,
+    padding: Spacing.sm,
+  },
+  pickText: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: Colors.darkGreen,
+    flex: 1,
   },
   actionBtn: {
     marginTop: Spacing.md,

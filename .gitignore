@@ -7,6 +7,18 @@ backend/node_modules/
 # Ignore the backend timage folder
 backend/timage/
 
+# Python caches / bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Local database & generated settlement artifacts
+backend/db.sqlite3
+backend/settlements/
+
+# Media / generated files
+*.pdf
+
 
 # ==========================================
 # FRONTEND RULES (Expo / React Native)

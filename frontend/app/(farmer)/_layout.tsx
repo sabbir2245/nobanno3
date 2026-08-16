@@ -65,6 +65,7 @@ export default function FarmerLayout() {
           href: null,
         }}
       />
+      <Tabs.Screen name="set-location" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -12,7 +12,7 @@ import { api, BangladeshLocation } from '@/services/api';
 import { Colors, Fonts, Spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
-interface LocationSelection {
+export interface LocationSelection {
   division: { id: number; name_en: string; name_bn: string } | null;
   district: { id: number; name_en: string; name_bn: string } | null;
   upazila: { id: number; name_en: string; name_bn: string } | null;

@@ -20,18 +20,11 @@ export default function FarmerAccountScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { token, user, logout, refreshProfile } = useAuth();
-  const [wallet, setWallet] = useState({
-    pending_payouts: '0',
-    total_earnings: '0',
-    total_commission_deductions: '0',
-  });
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
     await refreshProfile();
-    const data = await api.getFarmerWallet(token);
-    setWallet(data);
   }, [token, refreshProfile]);
 
   useFocusEffect(
@@ -78,27 +71,6 @@ export default function FarmerAccountScreen() {
             {user?.avg_rating != null && (
               <Text style={styles.rating}>★ {user.avg_rating} গড় রেটিং</Text>
             )}
-          </View>
-        </View>
-
-        <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>বাকি পাওনা (পেন্ডিং)</Text>
-            <Text style={styles.statValue}>
-              ৳ {parseFloat(wallet.pending_payouts).toFixed(0)}
-            </Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>মোট উপার্জন</Text>
-            <Text style={styles.statValue}>
-              ৳ {parseFloat(wallet.total_earnings).toFixed(0)}
-            </Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statLabel}>কমিশন দেওয়া হয়েছে</Text>
-            <Text style={styles.statValue}>
-              ৳ {parseFloat(wallet.total_commission_deductions).toFixed(0)}
-            </Text>
           </View>
         </View>
 
@@ -179,43 +151,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.darkGreen,
     marginTop: Spacing.xs,
-  },
-  walletCard: {
-    backgroundColor: Colors.darkGreen,
-    borderRadius: Radius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  walletLabel: {
-    fontFamily: Fonts.regular,
-    fontSize: 13,
-    color: Colors.lightGreen,
-  },
-  walletValue: {
-    fontFamily: Fonts.bold,
-    fontSize: 28,
-    color: Colors.white,
-    marginTop: Spacing.xs,
-  },
-  statsGrid: {
-    gap: Spacing.sm,
-  },
-  statItem: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  statLabel: {
-    fontFamily: Fonts.regular,
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-  statValue: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 16,
-    color: Colors.darkGreen,
-    marginTop: 2,
   },
 });

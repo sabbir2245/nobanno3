@@ -16,7 +16,9 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, ApiError } from '@/services/api';
+import { api, ApiError, LocationInfo } from '@/services/api';
+import CascadeLocationPicker from '@/components/CascadingLocationPicker';
+import { LocationSelection } from '@/components/CascadingLocationPicker';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
@@ -24,6 +26,17 @@ import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 export default function UpdateProfileScreen() {
   const router = useRouter();
   const { token, user, refreshProfile } = useAuth();
+
+  const node = (name?: string | null, id = -1) =>
+    name ? { id, name_en: name, name_bn: name } : null;
+
+  const toLocationSelection = (loc: LocationInfo): LocationSelection => ({
+    division: node(loc.division, loc.id),
+    district: node(loc.district, loc.id),
+    upazila: node(loc.upazila, loc.id),
+    union: node(loc.union, loc.id),
+    ward: null,
+  });
 
   const [name, setName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -33,6 +46,8 @@ export default function UpdateProfileScreen() {
   const [longitude, setLongitude] = useState<number | null>(null);
   const [locLabel, setLocLabel] = useState('');
   const [locLoading, setLocLoading] = useState(false);
+  const [locationId, setLocationId] = useState<number | null>(null);
+  const [initialSelection, setInitialSelection] = useState<LocationSelection | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [profilePicUri, setProfilePicUri] = useState<string | null>(null);
@@ -60,6 +75,12 @@ export default function UpdateProfileScreen() {
       if (user.latitude && user.longitude) {
         setLocLabel(`${user.latitude.toFixed(4)}, ${user.longitude.toFixed(4)}`);
       }
+      if (user.location) {
+        setLocationId(user.location.id);
+        setInitialSelection(
+          toLocationSelection(user.location)
+        );
+      }
     }
     setInitializing(false);
   }, [user]);
@@ -70,7 +91,8 @@ export default function UpdateProfileScreen() {
     address !== (user?.address || '') ||
     email !== (user?.email || '') ||
     latitude !== user?.latitude ||
-    longitude !== user?.longitude;
+    longitude !== user?.longitude ||
+    locationId !== (user?.location?.id ?? null);
 
   const detectLocation = async () => {
     setLocLoading(true);
@@ -119,6 +141,9 @@ export default function UpdateProfileScreen() {
         latitude: latitude ?? undefined,
         longitude: longitude ?? undefined,
       };
+      if (locationId) {
+        body.location = locationId;
+      }
       if (profilePicUri) {
         body.profile_picture = profilePicUri;
       }
@@ -213,7 +238,24 @@ export default function UpdateProfileScreen() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <Ionicons name="location-outline" size={22} color={Colors.darkGreen} />
-            <Text style={styles.cardTitle}>Your Location</Text>
+            <Text style={styles.cardTitle}>Your Area</Text>
+          </View>
+          <Text style={styles.locHint}>
+            Select your division, district, upazila and union.
+          </Text>
+          <CascadeLocationPicker
+            initialLocation={initialSelection}
+            onLocationSelected={(sel) => {
+              const id = sel.union?.id ?? sel.upazila?.id ?? null;
+              setLocationId(id);
+            }}
+          />
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="navigate-outline" size={22} color={Colors.darkGreen} />
+            <Text style={styles.cardTitle}>GPS Pin (optional)</Text>
           </View>
           <Text style={styles.locHint}>
             Used to show nearby listings and calculate distances.

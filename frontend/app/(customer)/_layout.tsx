@@ -30,6 +30,7 @@ export default function CustomerLayout() {
         title: 'My Account',
         tabBarIcon: ({ color, size }) => <Ionicons name="person-circle" size={size} color={color} />,
       }} />
+      <Tabs.Screen name="payment" options={{ href: null }} />
     </Tabs>
   );
 }

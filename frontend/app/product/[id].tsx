@@ -9,7 +9,6 @@ import {
   Image,
   ActivityIndicator,
   TextInput,
-  Modal,
   NativeSyntheticEvent,
   NativeScrollEvent,
   Dimensions,
@@ -19,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { api, Post, Review } from '@/services/api';
+import { ImageViewer } from '@/components/ImageViewer';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ReviewCard } from '@/components/ReviewCard';
@@ -26,8 +26,6 @@ import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const IMG_W = SCREEN_WIDTH - Spacing.md * 2;
-
-const MIN_QTY = 0;
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,11 +35,10 @@ export default function ProductDetailScreen() {
   const [post, setPost] = useState<Post | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
-  const [quantity, setQuantity] = useState(MIN_QTY);
+  const [quantity, setQuantity] = useState('');
   const [imageIndex, setImageIndex] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  const previewScrollRef = useRef<ScrollView>(null);
 
   const allImages: string[] = React.useMemo(() => {
     const uris: string[] = [];
@@ -85,7 +82,8 @@ export default function ProductDetailScreen() {
 
   const maxQty = Math.floor(parseFloat(post.total_weight_kg));
   const pricePerKg = parseFloat(post.price_per_kg);
-  const productCost = quantity * pricePerKg;
+  const qtyNum = parseInt(quantity, 10);
+  const productCost = (isNaN(qtyNum) ? 0 : qtyNum) * pricePerKg;
 
   const avgRating = post.farmer_avg_rating ?? 0;
   const ratingsCount = post.farmer_ratings_count ?? 0;
@@ -99,21 +97,26 @@ export default function ProductDetailScreen() {
   });
 
   const handleQtyChange = (text: string) => {
+    if (text === '') {
+      setQuantity('');
+      return;
+    }
     const val = parseInt(text, 10);
     if (isNaN(val) || val < 0) {
-      setQuantity(0);
+      setQuantity('');
     } else {
-      setQuantity(Math.min(val, maxQty));
+      setQuantity(String(Math.min(val, maxQty)));
     }
   };
 
   const addToCart = () => {
-    if (quantity <= 0) {
+    const qty = parseInt(quantity, 10);
+    if (isNaN(qty) || qty <= 0) {
       Alert.alert('Invalid quantity', 'Please enter a quantity greater than 0.');
       return;
     }
-    addItem(post, quantity);
-    Alert.alert('Added to cart', `${quantity} kg of ${post.title} added.`, [
+    addItem(post, qty);
+    Alert.alert('Added to cart', `${qty} kg of ${post.title} added.`, [
       { text: 'View Cart', onPress: () => router.push('/(customer)/cart') },
       { text: 'Continue', style: 'cancel' },
     ]);
@@ -188,7 +191,12 @@ export default function ProductDetailScreen() {
           </View>
           <View style={styles.sellerInfo}>
             <Text style={styles.productTitle}>{post.title}</Text>
-            <Text style={styles.farmerName}>{post.farmer_name || post.farmer_username}</Text>
+            <TouchableOpacity onPress={() => router.push(`/farmer/${post.farmer}`)}>
+              <Text style={styles.farmerName}>
+                {post.farmer_name || post.farmer_username}{' '}
+                <Ionicons name="chevron-forward" size={13} color={Colors.darkGreen} />
+              </Text>
+            </TouchableOpacity>
             <View style={styles.ratingRow}>
               {Array.from({ length: fullStars }).map((_, i) => (
                 <Ionicons key={`f-${i}`} name="star" size={14} color={Colors.starGold} />
@@ -239,14 +247,14 @@ export default function ProductDetailScreen() {
         <Text style={styles.sectionLabel}>Quantity (kg)</Text>
         <TextInput
           style={styles.qtyInput}
-          value={String(quantity)}
+          value={quantity}
           onChangeText={handleQtyChange}
           keyboardType="number-pad"
           placeholder="Enter quantity"
           placeholderTextColor={Colors.textMuted}
         />
 
-        {quantity > 0 && (
+        {qtyNum > 0 && (
           <View style={styles.costBox}>
             <View style={styles.costRow}>
               <Text style={styles.costLabel}>Product Cost:</Text>
@@ -266,7 +274,7 @@ export default function ProductDetailScreen() {
         {post.description ? <Text style={styles.description}>{post.description}</Text> : null}
 
         <View style={styles.actionRow}>
-          <PrimaryButton title="Place Bulk Order" onPress={addToCart} variant="sage" style={styles.primaryAction} />
+          <PrimaryButton title="Add to Cart" onPress={addToCart} variant="sage" style={styles.primaryAction} />
         </View>
 
         {/* ─── REVIEWS SECTION ─── */}
@@ -320,51 +328,12 @@ export default function ProductDetailScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={showPreview} transparent animationType="fade" onRequestClose={() => setShowPreview(false)}>
-        <View style={styles.previewOverlay}>
-          <ScrollView ref={previewScrollRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-            onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-              if (idx !== imageIndex) setImageIndex(idx);
-            }}
-            scrollEventThrottle={16} style={{ flex: 1 }}
-          >
-            {allImages.map((uri, i) => (
-              <TouchableOpacity key={i} activeOpacity={1} onPress={() => {}}>
-                <Image source={{ uri }} style={{ width: SCREEN_WIDTH, height: Dimensions.get('window').height * 0.6 }} resizeMode="contain" />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          {allImages.length > 1 && (
-            <>
-              {imageIndex > 0 && (
-                <TouchableOpacity style={styles.previewArrowLeft} onPress={() => {
-                  const next = imageIndex - 1;
-                  setImageIndex(next);
-                  previewScrollRef.current?.scrollTo({ x: next * SCREEN_WIDTH, animated: true });
-                }}>
-                  <Ionicons name="chevron-back-circle" size={40} color={Colors.white} />
-                </TouchableOpacity>
-              )}
-              {imageIndex < allImages.length - 1 && (
-                <TouchableOpacity style={styles.previewArrowRight} onPress={() => {
-                  const next = imageIndex + 1;
-                  setImageIndex(next);
-                  previewScrollRef.current?.scrollTo({ x: next * SCREEN_WIDTH, animated: true });
-                }}>
-                  <Ionicons name="chevron-forward-circle" size={40} color={Colors.white} />
-                </TouchableOpacity>
-              )}
-            </>
-          )}
-          <View style={styles.previewCounter}>
-            <Text style={styles.previewCounterText}>{imageIndex + 1} / {allImages.length}</Text>
-          </View>
-          <TouchableOpacity style={styles.previewClose} onPress={() => setShowPreview(false)}>
-            <Ionicons name="close-circle" size={32} color={Colors.white} />
-          </TouchableOpacity>
-        </View>
-      </Modal>
+      <ImageViewer
+        visible={showPreview}
+        images={allImages}
+        initialIndex={imageIndex}
+        onClose={() => setShowPreview(false)}
+      />
     </View>
   );
 }
@@ -457,10 +426,4 @@ const styles = StyleSheet.create({
   barFill: { height: 6, backgroundColor: Colors.starGold, borderRadius: 3 },
   barCount: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted, width: 20, textAlign: 'right' },
   emptyReviews: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.md },
-  previewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
-  previewArrowLeft: { position: 'absolute', left: 10, top: '50%', marginTop: -20 },
-  previewArrowRight: { position: 'absolute', right: 10, top: '50%', marginTop: -20 },
-  previewCounter: { position: 'absolute', bottom: 40, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 4 },
-  previewCounterText: { fontFamily: Fonts.medium, fontSize: 14, color: Colors.white },
-  previewClose: { position: 'absolute', top: 50, right: 20 },
 });

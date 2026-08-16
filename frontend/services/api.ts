@@ -458,17 +458,14 @@ export const api = {
   getReviews: (postId: number) =>
     request<Review[]>(`/reviews/?post_id=${postId}`, { method: 'GET' }),
 
+  getFarmerReviews: (farmerId: number) =>
+    request<Review[]>(`/reviews/?farmer_id=${farmerId}`, { method: 'GET' }),
+
+  getFarmer: (farmerId: number) =>
+    request<User>(`/farmers/${farmerId}/`, { method: 'GET' }),
+
   getReviewsByCustomer: (token: string, customerId: number) =>
     request<Review[]>(`/reviews/?customer_id=${customerId}`, { method: 'GET' }, token),
-
-  getFarmerWallet: (token: string) =>
-    request<{
-      balance: string;
-      pending_payouts: string;
-      total_earnings: string;
-      total_commission_deductions: string;
-      recent_transactions: Order[];
-    }>('/farmer/wallet/', { method: 'GET' }, token),
 
   updateProfileInfo: (token: string, body: Partial<Pick<User, 'name' | 'phone_number' | 'address' | 'email' | 'latitude' | 'longitude' | 'profile_picture'>> & { location?: number }) =>
     request<User>(

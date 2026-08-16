@@ -25,7 +25,9 @@
       "package": "com.nobanno.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -46,6 +48,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "439750be-a199-4c2f-b2b6-1cf3db902365"
+      }
+    },
+    "owner": "robinsoncake"
   }
 }

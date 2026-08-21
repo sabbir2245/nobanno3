@@ -46,3 +46,4 @@ frontend/expo-env.d.ts
 
 # Secrets / API keys
 frontend/groq-deepapi.txt
+frontend/groqapi.txt

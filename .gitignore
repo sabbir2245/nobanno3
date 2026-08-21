@@ -43,3 +43,6 @@ frontend/expo-env.d.ts
 # Archives / scratch
 *.zip
 /d/
+
+# Secrets / API keys
+frontend/groq-deepapi.txt

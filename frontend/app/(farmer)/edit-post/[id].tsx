@@ -18,10 +18,13 @@ import { api, ApiError, ProductType } from '@/services/api';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProductTypePicker } from '@/components/ProductTypePicker';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 import * as ImagePicker from 'expo-image-picker';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 export default function EditPostScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token } = useAuth();
@@ -119,7 +122,7 @@ export default function EditPostScreen() {
   if (fetching) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={Colors.darkGreen} />
+        <ActivityIndicator size="large" color={colors.darkGreen} />
       </View>
     );
   }
@@ -133,14 +136,14 @@ export default function EditPostScreen() {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.white} />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Post</Text>
         <TouchableOpacity onPress={handleSave} disabled={loading} style={styles.backBtn}>
           {loading ? (
-            <ActivityIndicator size="small" color={Colors.white} />
+            <ActivityIndicator size="small" color={colors.white} />
           ) : (
-            <Ionicons name="checkmark" size={24} color={Colors.white} />
+            <Ionicons name="checkmark" size={24} color={colors.white} />
           )}
         </TouchableOpacity>
       </View>
@@ -152,7 +155,7 @@ export default function EditPostScreen() {
             <View key={`new-${i}`} style={styles.photoBox}>
               <Image source={{ uri }} style={styles.previewImage} />
               <TouchableOpacity style={styles.removeBtn} onPress={() => removeImage(i)}>
-                <Ionicons name="close-circle" size={22} color={Colors.darkGreen} />
+                <Ionicons name="close-circle" size={22} color={colors.darkGreen} />
               </TouchableOpacity>
             </View>
           ))}
@@ -166,7 +169,7 @@ export default function EditPostScreen() {
           ))}
           {allDisplayImages.length < 3 && (
             <TouchableOpacity style={styles.photoBox} onPress={pickImages}>
-              <Ionicons name="add" size={28} color={Colors.darkGreen} />
+              <Ionicons name="add" size={28} color={colors.darkGreen} />
               <Text style={styles.photoText}>Add Images</Text>
             </TouchableOpacity>
           )}
@@ -225,7 +228,7 @@ export default function EditPostScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: Colors.paleGreen,
@@ -254,7 +257,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: Fonts.semiBold,
     fontSize: 18,
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
   content: {
     padding: Spacing.md,
@@ -312,7 +315,7 @@ const styles = StyleSheet.create({
   existingBadgeText: {
     fontFamily: Fonts.regular,
     fontSize: 9,
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
   grid: {
     flexDirection: 'row',

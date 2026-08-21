@@ -18,17 +18,23 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProductTypePicker } from '@/components/ProductTypePicker';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 import * as ImagePicker from "expo-image-picker";
 import { useTranslation } from 'react-i18next';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 export default function CreatePostScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { token, user } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [totalWeight, setTotalWeight] = useState('');
   const [pricePerKg, setPricePerKg] = useState('');
+  const [quantityType, setQuantityType] = useState<'kg' | 'piece'>('kg');
+  const [estWeight, setEstWeight] = useState('');
+  const [timeAvailability, setTimeAvailability] = useState('');
   const [loading, setLoading] = useState(false);
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [productTypeId, setProductTypeId] = useState<number | null>(null);
@@ -41,7 +47,7 @@ export default function CreatePostScreen() {
 
   const selectedType = productTypes.find((pt) => pt.id === productTypeId);
   const maxPrice = selectedType?.max_price_limit ?? null;
-  const pricePlaceholder = maxPrice ? `Max: ৳${parseFloat(maxPrice).toFixed(0)}` : 'Max: ৳999';
+  const pricePlaceholder = maxPrice ? `Price per ${quantityType === 'piece' ? 'piece' : 'kg'} (max ৳${parseFloat(maxPrice).toFixed(0)})` : `Enter price per ${quantityType === 'piece' ? 'piece' : 'kg'}`;
 
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -69,6 +75,10 @@ export default function CreatePostScreen() {
       Alert.alert('Missing fields', 'Product name, quantity and price are required.');
       return;
     }
+    if (quantityType === 'piece' && !estWeight) {
+      Alert.alert('Missing field', 'Per-piece listings require an estimated weight per piece.');
+      return;
+    }
     const farmerLocationId = user?.location?.id;
     if (!farmerLocationId) {
       Alert.alert('Location missing', 'Set your location in your profile before posting a listing.');
@@ -82,6 +92,9 @@ export default function CreatePostScreen() {
         description,
         total_weight_kg: parseFloat(totalWeight),
         price_per_kg: parseFloat(pricePerKg),
+        quantity_type: quantityType,
+        est_weight_kg: quantityType === 'piece' ? parseFloat(estWeight) : undefined,
+        time_availability: timeAvailability ? parseInt(timeAvailability, 10) : undefined,
         location: farmerLocationId,
         product_type: productTypeId || undefined,
         imageUris: imageUris.length > 0 ? imageUris : undefined,
@@ -93,11 +106,17 @@ export default function CreatePostScreen() {
       setDescription('');
       setTotalWeight('');
       setPricePerKg('');
+      setQuantityType('kg');
+      setEstWeight('');
+      setTimeAvailability('');
       setImageUris([]);
       setProductTypeId(null);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Failed to post listing';
-      Alert.alert('Error', msg);
+      console.log('[POST] Listing submit FAILED:', err);
+      console.log('[POST] stack:', err instanceof Error ? err.stack : '(no stack)');
+      console.log('[POST] ApiError data:', err instanceof ApiError ? err.data : null);
+      Alert.alert('Error posting listing', `${msg}\n\n(Details logged to console)`);
     } finally {
       setLoading(false);
     }
@@ -114,13 +133,13 @@ export default function CreatePostScreen() {
             <View key={i} style={styles.photoBox}>
               <Image source={{ uri }} style={styles.previewImage} />
               <TouchableOpacity style={styles.removeBtn} onPress={() => removeImage(i)}>
-                <Ionicons name="close-circle" size={22} color={Colors.darkGreen} />
+                <Ionicons name="close-circle" size={22} color={colors.darkGreen} />
               </TouchableOpacity>
             </View>
           ))}
           {imageUris.length < 3 && (
             <TouchableOpacity style={styles.photoBox} onPress={pickImages}>
-              <Ionicons name="add" size={28} color={Colors.darkGreen} />
+              <Ionicons name="add" size={28} color={colors.darkGreen} />
               <Text style={styles.photoText}>{t('add_images')}</Text>
             </TouchableOpacity>
           )}
@@ -132,26 +151,71 @@ export default function CreatePostScreen() {
           selectedId={productTypeId}
           onSelect={(type) => setProductTypeId(type ? type.id : null)}
         />
-        <InputField placeholder={t('product_name')} value={title} onChangeText={setTitle} />
-        <InputField placeholder={t('description')} value={description} onChangeText={setDescription} multiline />
+        <InputField placeholder="পণ্যের নাম" value={title} onChangeText={setTitle} />
+        <InputField placeholder="বিবরণ" value={description} onChangeText={setDescription} multiline />
 
         <Text style={styles.sectionLabel}>{t('quantity_price')}</Text>
-        <View style={styles.grid}>
-          <InputField placeholder={t('total_qty')} value={totalWeight} onChangeText={setTotalWeight} keyboardType="decimal-pad" />
-          <InputField placeholder={pricePlaceholder} value={pricePerKg} onChangeText={setPricePerKg} keyboardType="decimal-pad" />
+        <View style={styles.unitToggle}>
+          {(['kg', 'piece'] as const).map((unit) => (
+            <TouchableOpacity
+              key={unit}
+              style={[styles.unitOption, quantityType === unit && styles.unitOptionActive]}
+              onPress={() => setQuantityType(unit)}
+            >
+              <Text style={[styles.unitText, quantityType === unit && styles.unitTextActive]}>
+                {unit === 'kg' ? 'প্রতি কেজি' : 'প্রতি পিস'}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
+        <View style={styles.grid}>
+          <InputField
+            placeholder={quantityType === 'kg' ? 'মোট ওজন (কেজি)' : 'মোট পিস'}
+            value={totalWeight}
+            onChangeText={setTotalWeight}
+            keyboardType="decimal-pad"
+          />
+          <View style={styles.priceWrap}>
+            <InputField
+              placeholder={pricePlaceholder}
+              value={pricePerKg}
+              onChangeText={setPricePerKg}
+              keyboardType="decimal-pad"
+            />
+            {maxPrice && (
+              <Text style={styles.maxPriceText}>সর্বোচ্চ: ৳{parseFloat(maxPrice).toFixed(0)}</Text>
+            )}
+          </View>
+        </View>
+        {quantityType === 'piece' && (
+          <View style={styles.estWeightRow}>
+            <InputField
+              placeholder="প্রতি পিস আনুমানিক ওজন (কেজি)"
+              value={estWeight}
+              onChangeText={setEstWeight}
+              keyboardType="decimal-pad"
+            />
+          </View>
+        )}
+        <Text style={styles.sectionLabel}>সময়সীমা</Text>
+        <InputField
+          placeholder="উপলব্ধতার সময়সীমা (ঘণ্টা)"
+          value={timeAvailability}
+          onChangeText={setTimeAvailability}
+          keyboardType="number-pad"
+        />
 
-        <PrimaryButton title={t('post_listing')} onPress={submit} loading={loading} />
+        <PrimaryButton title="পোস্ট করুন" onPress={submit} loading={loading} />
 
         <View style={styles.commissionNote}>
-          <Text style={styles.commissionText}>{t('commission_note')}</Text>
+          <Text style={styles.commissionText}>কমিশন নোট: বিক্রয় শেষে স্বয়ংক্রিয় হিসাব হবে।</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-  const styles = StyleSheet.create({
+  const createStyles = (Colors: ThemeColors) => StyleSheet.create({
     flex: {
       flex: 1,
       backgroundColor: Colors.paleGreen,
@@ -199,10 +263,52 @@ export default function CreatePostScreen() {
       right: -4,
       backgroundColor: Colors.white,
       borderRadius: 11,
+      width: 22,
+      height: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     grid: {
       flexDirection: 'row',
       gap: Spacing.sm,
+    },
+    priceWrap: {
+      flex: 1,
+    },
+    maxPriceText: {
+      fontFamily: Fonts.medium,
+      fontSize: 12,
+      color: Colors.darkGreen,
+      marginTop: 4,
+      textAlign: 'right',
+    },
+    unitToggle: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    unitOption: {
+      flex: 1,
+      paddingVertical: Spacing.sm,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderColor: Colors.lightGreen,
+      alignItems: 'center',
+    },
+    unitOptionActive: {
+      backgroundColor: Colors.darkGreen,
+      borderColor: Colors.darkGreen,
+    },
+    unitText: {
+      fontFamily: Fonts.semiBold,
+      fontSize: 14,
+      color: Colors.darkGreen,
+    },
+    unitTextActive: {
+      color: Colors.textOnPrimary,
+    },
+    estWeightRow: {
+      marginTop: Spacing.sm,
     },
     commissionNote: {
       flexDirection: 'row',

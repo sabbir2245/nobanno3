@@ -11,7 +11,7 @@ import {
 } from '@expo-google-fonts/lora';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
-import { Colors } from '@/constants/theme';
+import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,27 +30,38 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <AuthProvider>
-      <CartProvider>
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: Colors.paleGreen },
-          }}
-        >
-          <Stack.Screen name="index" />
+    <ThemeProvider>
+      <AuthProvider>
+        <CartProvider>
+          <RootNavigator />
+        </CartProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  );
+}
 
-          <Stack.Screen name="auth/login" />
-          <Stack.Screen name="auth/register" />
-          <Stack.Screen name="auth/forgot" />
-          <Stack.Screen name="(customer)" />
-          <Stack.Screen name="(farmer)" />
-          <Stack.Screen name="(deliveryman)" />
-          <Stack.Screen name="(customer)/payment" options={{ presentation: 'card' }} />
-          <Stack.Screen name="product/[id]" options={{ presentation: 'card' }} />
-        </Stack>
-      </CartProvider>
-    </AuthProvider>
+function RootNavigator() {
+  const { colors } = useTheme();
+  return (
+    <>
+      <StatusBar style="light" />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.paleGreen },
+        }}
+      >
+        <Stack.Screen name="index" />
+
+        <Stack.Screen name="auth/login" />
+        <Stack.Screen name="auth/register" />
+        <Stack.Screen name="auth/forgot" />
+        <Stack.Screen name="(customer)" />
+        <Stack.Screen name="(farmer)" />
+        <Stack.Screen name="(deliveryman)" />
+        <Stack.Screen name="(customer)/payment" options={{ presentation: 'card' }} />
+        <Stack.Screen name="product/[id]" options={{ presentation: 'card' }} />
+      </Stack>
+    </>
   );
 }

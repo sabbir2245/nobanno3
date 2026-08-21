@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Fonts, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
+import { Fonts, Spacing, ThemeColors } from '@/constants/theme';
 
 interface Props {
   title: string;
@@ -11,12 +12,14 @@ interface Props {
 }
 
 export function ScreenHeader({ title, subtitle, onBack, rightElement }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.container}>
       <View style={styles.row}>
         {onBack ? (
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={Colors.white} />
+            <Ionicons name="arrow-back" size={22} color={colors.white} />
           </TouchableOpacity>
         ) : (
           <View style={styles.backPlaceholder} />
@@ -33,7 +36,7 @@ export function ScreenHeader({ title, subtitle, onBack, rightElement }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: Colors.headerGreen,
     paddingTop: Spacing.md,
@@ -60,11 +63,12 @@ const styles = StyleSheet.create({
   subtitle: {
     fontFamily: Fonts.regular,
     fontSize: 12,
-    color: Colors.lightGreen,
+    color: Colors.textOnPrimary,
+    opacity: 0.8,
   },
   title: {
     fontFamily: Fonts.semiBold,
     fontSize: 18,
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
 });

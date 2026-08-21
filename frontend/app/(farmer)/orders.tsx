@@ -11,10 +11,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api, Order } from '@/services/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { OrderCard } from '@/components/OrderCard';
-import { Colors, Fonts, Spacing } from '@/constants/theme';
+import { Fonts, Spacing, ThemeColors } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
+import { useThemedStyles } from '@/contexts/ThemeContext';
 
 export default function FarmerOrdersScreen() {
+  const styles = useThemedStyles(createStyles);
   const { token } = useAuth();
   const { t } = useTranslation();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -72,7 +74,7 @@ orders.map((order) => (
     );
   }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.paleGreen,

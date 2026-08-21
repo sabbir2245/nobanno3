@@ -12,9 +12,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { api, User, Review } from '@/services/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { ReviewCard } from '@/components/ReviewCard';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 export default function FarmerProfileScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [farmer, setFarmer] = useState<User | null>(null);
@@ -53,7 +56,7 @@ export default function FarmerProfileScreen() {
     return (
       <View style={styles.center}>
         <ScreenHeader title="Farmer" onBack={() => router.back()} />
-        <ActivityIndicator color={Colors.darkGreen} />
+        <ActivityIndicator color={colors.darkGreen} />
       </View>
     );
   }
@@ -85,23 +88,23 @@ export default function FarmerProfileScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerCard}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={36} color={Colors.white} />
+            <Ionicons name="person" size={36} color={colors.white} />
           </View>
           <Text style={styles.name}>{farmer.name || farmer.username}</Text>
           {farmer.is_verified && (
             <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.darkGreen} />
+              <Ionicons name="checkmark-circle" size={14} color={colors.darkGreen} />
               <Text style={styles.verifiedText}>Verified Seller</Text>
             </View>
           )}
 
           <View style={styles.ratingRow}>
             {Array.from({ length: fullStars }).map((_, i) => (
-              <Ionicons key={`f-${i}`} name="star" size={18} color={Colors.starGold} />
+              <Ionicons key={`f-${i}`} name="star" size={18} color={colors.starGold} />
             ))}
-            {hasHalf && <Ionicons name="star-half" size={18} color={Colors.starGold} />}
+            {hasHalf && <Ionicons name="star-half" size={18} color={colors.starGold} />}
             {Array.from({ length: emptyStars }).map((_, i) => (
-              <Ionicons key={`e-${i}`} name="star-outline" size={18} color={Colors.starGold} />
+              <Ionicons key={`e-${i}`} name="star-outline" size={18} color={colors.starGold} />
             ))}
             <Text style={styles.ratingText}>
               {avg > 0 ? `${avg.toFixed(1)} (${count})` : 'No ratings yet'}
@@ -110,7 +113,7 @@ export default function FarmerProfileScreen() {
 
           {location && (
             <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={16} color={Colors.darkGreen} />
+              <Ionicons name="location-outline" size={16} color={colors.darkGreen} />
               <Text style={styles.locationText}>{location}</Text>
             </View>
           )}
@@ -118,7 +121,7 @@ export default function FarmerProfileScreen() {
 
         <Text style={styles.sectionLabel}>Reviews ({reviews.length})</Text>
         {reviewsLoading ? (
-          <ActivityIndicator color={Colors.darkGreen} style={{ marginTop: Spacing.lg }} />
+          <ActivityIndicator color={colors.darkGreen} style={{ marginTop: Spacing.lg }} />
         ) : reviews.length === 0 ? (
           <Text style={styles.empty}>No reviews yet.</Text>
         ) : (
@@ -129,7 +132,7 @@ export default function FarmerProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.paleGreen },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl },
   center: { flex: 1, backgroundColor: Colors.paleGreen },

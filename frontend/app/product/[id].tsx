@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
   TextInput,
+  Modal,
   NativeSyntheticEvent,
   NativeScrollEvent,
   Dimensions,
@@ -22,12 +23,15 @@ import { ImageViewer } from '@/components/ImageViewer';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ReviewCard } from '@/components/ReviewCard';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const IMG_W = SCREEN_WIDTH - Spacing.md * 2;
 
 export default function ProductDetailScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { token } = useAuth();
@@ -38,6 +42,7 @@ export default function ProductDetailScreen() {
   const [quantity, setQuantity] = useState('');
   const [imageIndex, setImageIndex] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
+  const [addedVisible, setAddedVisible] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const allImages: string[] = React.useMemo(() => {
@@ -84,6 +89,9 @@ export default function ProductDetailScreen() {
   const pricePerKg = parseFloat(post.price_per_kg);
   const qtyNum = parseInt(quantity, 10);
   const productCost = (isNaN(qtyNum) ? 0 : qtyNum) * pricePerKg;
+  const isPieceProduct = post.quantity_type === 'piece';
+  const quantityLabel = isPieceProduct ? 'pieces' : 'kg';
+  const priceUnit = isPieceProduct ? 'piece' : 'kg';
 
   const avgRating = post.farmer_avg_rating ?? 0;
   const ratingsCount = post.farmer_ratings_count ?? 0;
@@ -116,10 +124,7 @@ export default function ProductDetailScreen() {
       return;
     }
     addItem(post, qty);
-    Alert.alert('Added to cart', `${qty} kg of ${post.title} added.`, [
-      { text: 'View Cart', onPress: () => router.push('/(customer)/cart') },
-      { text: 'Continue', style: 'cancel' },
-    ]);
+    setAddedVisible(true);
   };
 
   return (
@@ -160,7 +165,7 @@ export default function ProductDetailScreen() {
                       scrollRef.current?.scrollTo({ x: next * IMG_W, animated: true });
                     }}
                   >
-                    <Ionicons name="chevron-back" size={16} color={Colors.white} />
+                    <Ionicons name="chevron-back" size={16} color={colors.white} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.arrowBtn, styles.arrowRight]}
@@ -170,7 +175,7 @@ export default function ProductDetailScreen() {
                       scrollRef.current?.scrollTo({ x: next * IMG_W, animated: true });
                     }}
                   >
-                    <Ionicons name="chevron-forward" size={16} color={Colors.white} />
+                    <Ionicons name="chevron-forward" size={16} color={colors.white} />
                   </TouchableOpacity>
                   <View style={styles.dots}>
                     {allImages.map((_, i) => (
@@ -181,36 +186,36 @@ export default function ProductDetailScreen() {
               )}
             </View>
           ) : (
-            <View style={{ width: IMG_W, height: 180, backgroundColor: Colors.lightGreen, borderRadius: Radius.md }} />
+            <View style={{ width: IMG_W, height: 180, backgroundColor: colors.lightGreen, borderRadius: Radius.md }} />
           )}
         </View>
 
         <View style={styles.sellerCard}>
           <View style={styles.sellerAvatar}>
-            <Ionicons name="person" size={28} color={Colors.white} />
+            <Ionicons name="person" size={28} color={colors.white} />
           </View>
           <View style={styles.sellerInfo}>
             <Text style={styles.productTitle}>{post.title}</Text>
             <TouchableOpacity onPress={() => router.push(`/farmer/${post.farmer}`)}>
               <Text style={styles.farmerName}>
                 {post.farmer_name || post.farmer_username}{' '}
-                <Ionicons name="chevron-forward" size={13} color={Colors.darkGreen} />
+                <Ionicons name="chevron-forward" size={13} color={colors.darkGreen} />
               </Text>
             </TouchableOpacity>
             <View style={styles.ratingRow}>
               {Array.from({ length: fullStars }).map((_, i) => (
-                <Ionicons key={`f-${i}`} name="star" size={14} color={Colors.starGold} />
+                <Ionicons key={`f-${i}`} name="star" size={14} color={colors.starGold} />
               ))}
-              {hasHalf && <Ionicons name="star-half" size={14} color={Colors.starGold} />}
+              {hasHalf && <Ionicons name="star-half" size={14} color={colors.starGold} />}
               {Array.from({ length: emptyStars }).map((_, i) => (
-                <Ionicons key={`e-${i}`} name="star-outline" size={14} color={Colors.starGold} />
+                <Ionicons key={`e-${i}`} name="star-outline" size={14} color={colors.starGold} />
               ))}
               <Text style={styles.ratingText}>
                 {avgRating > 0 ? `${avgRating.toFixed(1)} (${ratingsCount})` : 'No ratings'}
               </Text>
             </View>
             <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.darkGreen} />
+              <Ionicons name="checkmark-circle" size={14} color={colors.darkGreen} />
               <Text style={styles.verifiedText}>Seller Verification</Text>
             </View>
           </View>
@@ -219,17 +224,24 @@ export default function ProductDetailScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Price:</Text>
-            <Text style={styles.statValue}>৳ {pricePerKg.toFixed(0)} / kg</Text>
+            <Text style={styles.statValue}>৳ {pricePerKg.toFixed(0)} / {priceUnit}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Total Available:</Text>
-            <Text style={styles.statValue}>{maxQty} kg</Text>
+            <Text style={styles.statValue}>{maxQty} {quantityLabel}</Text>
           </View>
         </View>
 
+        {post.time_availability != null && post.time_availability > 0 && (
+          <View style={[styles.statBox, { marginBottom: Spacing.md }]}>
+            <Text style={styles.statLabel}>Time Availability:</Text>
+            <Text style={styles.statValue}>{post.time_availability} hrs</Text>
+          </View>
+        )}
+
         {post.location && (
           <View style={styles.locationCard}>
-            <Ionicons name="location-outline" size={16} color={Colors.darkGreen} />
+            <Ionicons name="location-outline" size={16} color={colors.darkGreen} />
             <View style={{ flex: 1 }}>
               <Text style={styles.locationTitle}>Collection Location</Text>
               <Text style={styles.locationValue}>
@@ -244,14 +256,14 @@ export default function ProductDetailScreen() {
           </View>
         )}
 
-        <Text style={styles.sectionLabel}>Quantity (kg)</Text>
+        <Text style={styles.sectionLabel}>Quantity ({isPieceProduct ? 'pieces' : 'kg'})</Text>
         <TextInput
           style={styles.qtyInput}
           value={quantity}
           onChangeText={handleQtyChange}
           keyboardType="number-pad"
-          placeholder="Enter quantity"
-          placeholderTextColor={Colors.textMuted}
+          placeholder={isPieceProduct ? 'Enter number of pieces' : 'Enter quantity in kg'}
+          placeholderTextColor={colors.textMuted}
         />
 
         {qtyNum > 0 && (
@@ -274,7 +286,7 @@ export default function ProductDetailScreen() {
         {post.description ? <Text style={styles.description}>{post.description}</Text> : null}
 
         <View style={styles.actionRow}>
-          <PrimaryButton title="Add to Cart" onPress={addToCart} variant="sage" style={styles.primaryAction} />
+          <PrimaryButton title="Add to Cart" onPress={addToCart} variant="sage" style={styles.primaryActionBordered} />
         </View>
 
         {/* ─── REVIEWS SECTION ─── */}
@@ -290,11 +302,11 @@ export default function ProductDetailScreen() {
               <Text style={styles.bigLabel}>out of 5</Text>
               <View style={styles.summaryStars}>
                 {Array.from({ length: fullStars }).map((_, i) => (
-                  <Ionicons key={`sf-${i}`} name="star" size={16} color={Colors.starGold} />
+                  <Ionicons key={`sf-${i}`} name="star" size={16} color={colors.starGold} />
                 ))}
-                {hasHalf && <Ionicons name="star-half" size={16} color={Colors.starGold} />}
+                {hasHalf && <Ionicons name="star-half" size={16} color={colors.starGold} />}
                 {Array.from({ length: emptyStars }).map((_, i) => (
-                  <Ionicons key={`se-${i}`} name="star-outline" size={16} color={Colors.starGold} />
+                  <Ionicons key={`se-${i}`} name="star-outline" size={16} color={colors.starGold} />
                 ))}
               </View>
               <Text style={styles.totalRatings}>{ratingsCount} total ratings</Text>
@@ -306,7 +318,7 @@ export default function ProductDetailScreen() {
                 return (
                   <View key={star} style={styles.barRow}>
                     <Text style={styles.barLabel}>{star}</Text>
-                    <Ionicons name="star" size={10} color={Colors.starGold} />
+                    <Ionicons name="star" size={10} color={colors.starGold} />
                     <View style={styles.barTrack}>
                       <View style={[styles.barFill, { width: `${pct}%` }]} />
                     </View>
@@ -319,7 +331,7 @@ export default function ProductDetailScreen() {
 
           {/* Reviews List */}
           {reviewsLoading ? (
-            <ActivityIndicator color={Colors.darkGreen} style={{ marginTop: Spacing.md }} />
+            <ActivityIndicator color={colors.darkGreen} style={{ marginTop: Spacing.md }} />
           ) : reviews.length === 0 ? (
             <Text style={styles.emptyReviews}>No reviews yet.</Text>
           ) : (
@@ -334,11 +346,34 @@ export default function ProductDetailScreen() {
         initialIndex={imageIndex}
         onClose={() => setShowPreview(false)}
       />
+      <Modal transparent visible={addedVisible} animationType="fade" onRequestClose={() => setAddedVisible(false)}>
+        <TouchableOpacity style={styles.popupOverlay} activeOpacity={1} onPress={() => setAddedVisible(false)}>
+          <View style={styles.popupCard}>
+            <Ionicons name="checkmark-circle" size={34} color={colors.darkGreen} />
+            <Text style={styles.popupTitle}>Added to cart</Text>
+            <Text style={styles.popupText}>{post.title} has been added successfully.</Text>
+            <View style={styles.popupActions}>
+              <TouchableOpacity style={[styles.popupBtn, styles.popupBtnSecondary]} onPress={() => setAddedVisible(false)}>
+                <Text style={styles.popupBtnSecondaryText}>Continue</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.popupBtn, styles.popupBtnPrimary]}
+                onPress={() => {
+                  setAddedVisible(false);
+                  router.push('/(customer)/cart');
+                }}
+              >
+                <Text style={styles.popupBtnPrimaryText}>View Cart</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.paleGreen },
   loading: { fontFamily: Fonts.regular, textAlign: 'center', marginTop: 40, color: Colors.textMuted },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl },
@@ -402,6 +437,11 @@ const styles = StyleSheet.create({
   description: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textMuted, lineHeight: 22, marginBottom: Spacing.md },
   actionRow: { flexDirection: 'row', gap: Spacing.sm },
   primaryAction: { flex: 2 },
+  primaryActionBordered: {
+    flex: 2,
+    borderWidth: 1,
+    borderColor: Colors.darkGreen,
+  },
   secondaryAction: { flex: 1 },
 
   // Review section
@@ -426,4 +466,24 @@ const styles = StyleSheet.create({
   barFill: { height: 6, backgroundColor: Colors.starGold, borderRadius: 3 },
   barCount: { fontFamily: Fonts.regular, fontSize: 11, color: Colors.textMuted, width: 20, textAlign: 'right' },
   emptyReviews: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.md },
+  popupOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', padding: Spacing.lg },
+  popupCard: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  popupTitle: { fontFamily: Fonts.bold, fontSize: 18, color: Colors.textDark, marginTop: Spacing.sm },
+  popupText: { fontFamily: Fonts.regular, fontSize: 13, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.xs },
+  popupActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg },
+  popupBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.pill, minWidth: 110, alignItems: 'center' },
+  popupBtnSecondary: { backgroundColor: Colors.paleGreen },
+  popupBtnSecondaryText: { fontFamily: Fonts.semiBold, color: Colors.darkGreen },
+  popupBtnPrimary: { backgroundColor: Colors.darkGreen },
+  popupBtnPrimaryText: { fontFamily: Fonts.semiBold, color: Colors.textOnPrimary },
 });

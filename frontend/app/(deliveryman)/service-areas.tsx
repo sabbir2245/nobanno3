@@ -11,13 +11,16 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 import { api, Area } from '@/services/api';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 
 export default function ServiceAreasScreen() {
   const router = useRouter();
   const { token } = useAuth();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [areas, setAreas] = useState<Area[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +71,7 @@ export default function ServiceAreasScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.darkGreen} />
+          <Ionicons name="arrow-back" size={24} color={colors.darkGreen} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Service Areas</Text>
         <View style={styles.backBtn} />
@@ -79,7 +82,7 @@ export default function ServiceAreasScreen() {
       </Text>
 
       {loading ? (
-        <ActivityIndicator color={Colors.darkGreen} style={{ marginTop: 60 }} />
+        <ActivityIndicator color={colors.darkGreen} style={{ marginTop: 60 }} />
       ) : areas.length === 0 ? (
         <Text style={styles.empty}>No service areas configured yet.</Text>
       ) : (
@@ -103,7 +106,7 @@ export default function ServiceAreasScreen() {
                 <Ionicons
                   name={active ? 'checkbox' : 'square-outline'}
                   size={24}
-                  color={active ? Colors.darkGreen : Colors.textMuted}
+                  color={active ? colors.darkGreen : colors.textMuted}
                 />
               </TouchableOpacity>
             );
@@ -122,7 +125,7 @@ export default function ServiceAreasScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.paleGreen },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -141,7 +144,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white, borderRadius: Radius.md, padding: Spacing.md,
     marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.border,
   },
-  rowActive: { borderColor: Colors.darkGreen, backgroundColor: '#E8F5E9' },
+  rowActive: { borderColor: Colors.darkGreen, backgroundColor: Colors.paleGreen },
   rowText: { flex: 1, marginRight: Spacing.sm },
   rowName: { fontFamily: Fonts.semiBold, fontSize: 15, color: Colors.textDark },
   rowNameActive: { color: Colors.darkGreen },

@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Post } from '@/services/api';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors, lightColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 interface Props {
   post: Post;
@@ -10,18 +11,30 @@ interface Props {
   imageTint?: string;
 }
 
-export function ProductCard({ post, onPress, imageTint = Colors.lightGreen }: Props) {
+export function ProductCard({ post, onPress, imageTint = lightColors.lightGreen }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const scale = useRef(new Animated.Value(1)).current;
   const rating = post.farmer_avg_rating ?? 0;
   const fullStars = Math.floor(rating);
   const hasHalf = rating - fullStars >= 0.5;
   const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
 
+  const pressIn = () => {
+    Animated.spring(scale, { toValue: 0.985, useNativeDriver: true, speed: 28, bounciness: 0 }).start();
+  };
+
+  const pressOut = () => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 24, bounciness: 0 }).start();
+  };
+
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
+    <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
+      <TouchableOpacity style={styles.cardTouch} onPress={onPress} activeOpacity={0.95} onPressIn={pressIn} onPressOut={pressOut}>
       <View style={[styles.imageArea, { backgroundColor: imageTint }]}>
         {(post.images?.length ?? 0) > 0 ? (
           <Image
-            source={{ uri: post.images[0].image }}
+            source={{ uri: post.images[0].image ?? undefined }}
             style={StyleSheet.absoluteFill}
             resizeMode="cover"
           />
@@ -44,7 +57,7 @@ export function ProductCard({ post, onPress, imageTint = Colors.lightGreen }: Pr
         <Text style={styles.farmer}>{post.farmer_name || post.farmer_username}</Text>
         {post.location && (
           <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={12} color={Colors.textMuted} />
+            <Ionicons name="location-outline" size={12} color={colors.textMuted} />
             <Text style={styles.locationText}>
               {[post.location.district, post.location.upazila, post.location.union]
                 .filter(Boolean)
@@ -54,11 +67,11 @@ export function ProductCard({ post, onPress, imageTint = Colors.lightGreen }: Pr
         )}
         <View style={styles.ratingRow}>
           {Array.from({ length: fullStars }).map((_, i) => (
-            <Ionicons key={`full-${i}`} name="star" size={14} color={Colors.starGold} />
+            <Ionicons key={`full-${i}`} name="star" size={14} color={colors.starGold} />
           ))}
-          {hasHalf && <Ionicons name="star-half" size={14} color={Colors.starGold} />}
+          {hasHalf && <Ionicons name="star-half" size={14} color={colors.starGold} />}
           {Array.from({ length: emptyStars }).map((_, i) => (
-            <Ionicons key={`empty-${i}`} name="star-outline" size={14} color={Colors.starGold} />
+            <Ionicons key={`empty-${i}`} name="star-outline" size={14} color={colors.starGold} />
           ))}
           <Text style={styles.ratingText}>{rating > 0 ? rating.toFixed(1) : ''}</Text>
         </View>
@@ -72,11 +85,12 @@ export function ProductCard({ post, onPress, imageTint = Colors.lightGreen }: Pr
           </Text>
         </View>
       </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   card: {
     backgroundColor: Colors.white,
     borderRadius: Radius.lg,
@@ -84,6 +98,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  cardTouch: {
+    overflow: 'hidden',
+    borderRadius: Radius.lg,
   },
   imageArea: {
     height: 140,
@@ -101,7 +124,7 @@ const styles = StyleSheet.create({
   distanceText: {
     fontFamily: Fonts.medium,
     fontSize: 11,
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
   body: {
     padding: Spacing.md,

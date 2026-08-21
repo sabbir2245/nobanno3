@@ -17,13 +17,17 @@ import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import CascadingLocationPicker from '@/components/CascadingLocationPicker';
 import { ApiError } from '@/services/api';
-import { Colors, Fonts, Spacing } from '@/constants/theme';
-import { authStyles } from '@/styles/global';
+import { Colors, Fonts, Spacing, ThemeColors } from '@/constants/theme';
+import { useAuthStyles } from '@/styles/global';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function RegisterScreen() {
   const router = useRouter();
   const { register } = useAuth();
+  const { colors } = useTheme();
+  const auth = useAuthStyles();
+  const styles = useThemedStyles(createStyles);
 
 
   const [form, setForm] = useState({
@@ -34,6 +38,7 @@ export default function RegisterScreen() {
     role: 'farmer',
     phone_number: '',
     address: '',
+    bkash_number: '',
   });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -71,6 +76,11 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (form.role === 'farmer' && !form.bkash_number.trim()) {
+      Alert.alert('bKash নম্বর আবশ্যক', 'কৃষকদের অবশ্যই bKash নম্বর দিতে হবে।');
+      return;
+    }
+
     if (form.password.length < 8) {
       Alert.alert('পাসওয়ার্ড সমস্যা', 'পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে।');
       return;
@@ -97,12 +107,12 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={authStyles.flex}
+      style={auth.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={authStyles.container}>
-        <Text style={authStyles.brand}>Nobanno</Text>
-        <Text style={authStyles.title}>অ্যাকাউন্ট তৈরি করুন</Text>
+      <ScrollView contentContainerStyle={auth.container}>
+        <Text style={auth.brand}>Nobanno</Text>
+        <Text style={auth.title}>অ্যাকাউন্ট তৈরি করুন</Text>
 
         <InputField
           label="পূর্ণ নাম"
@@ -121,14 +131,14 @@ export default function RegisterScreen() {
             <Ionicons
               name={getRoleIcon(form.role)}
               size={20}
-              color={Colors.mediumGreen}
+              color={colors.mediumGreen}
               style={styles.selectIcon}
             />
             <Text style={styles.selectBoxText}>
               {roleOptions.find((r) => r.value === form.role)?.label}
             </Text>
           </View>
-          <Ionicons name="chevron-down" size={20} color={Colors.mediumGreen} />
+          <Ionicons name="chevron-down" size={20} color={colors.mediumGreen} />
         </TouchableOpacity>
 
         <Modal
@@ -161,7 +171,7 @@ export default function RegisterScreen() {
                       <Ionicons
                         name={getRoleIcon(option.value)}
                         size={20}
-                        color={selected ? Colors.white : Colors.mediumGreen}
+                        color={selected ? colors.white : colors.mediumGreen}
                         style={styles.selectIcon}
                       />
                       <Text
@@ -174,7 +184,7 @@ export default function RegisterScreen() {
                       </Text>
                     </View>
                     {selected && (
-                      <Ionicons name="checkmark" size={20} color={Colors.white} />
+                      <Ionicons name="checkmark" size={20} color={colors.white} />
                     )}
                   </TouchableOpacity>
                 );
@@ -205,20 +215,31 @@ export default function RegisterScreen() {
           keyboardType="phone-pad"
           placeholder="01XXXXXXXXX"
         />
-        <InputField
-          label="ঠিকানা"
-          value={form.address}
-          onChangeText={(v) => update('address', v)}
-          placeholder="ডেলিভারি / খামারের ঠিকানা"
-        />
-
-        <Text style={styles.label}>আপনার এলাকা নির্বাচন করুন (ইউনিয়ন/উপজেলা)</Text>
+        {form.role === 'farmer' && (
+          <InputField
+            label="bKash নম্বর (কৃষকদের জন্য আবশ্যক)"
+            value={form.bkash_number}
+            onChangeText={(v) => update('bkash_number', v)}
+            keyboardType="phone-pad"
+            placeholder="01XXXXXXXXX"
+          />
+        )}
+        <Text style={styles.label}>আপনার এলাকা নির্বাচন করুন (ইউনিয়ন/উপজেলা/সিটি কর্পোরেশন)</Text>
         <CascadingLocationPicker
           onLocationSelected={(sel) => {
-            const id = sel.union?.id ?? sel.upazila?.id ?? null;
+            const id = sel.ward?.id ?? sel.union?.id ?? sel.upazila?.id ?? null;
             setLocationId(id);
           }}
         />
+
+        {locationId && (
+          <InputField
+            label="লেন / বাড়ি / রাস্তা"
+            value={form.address}
+            onChangeText={(v) => update('address', v)}
+            placeholder="যেমন: হাউস ১২, রোড ৫, সেক্টর ৭"
+          />
+        )}
 
         <Text style={styles.label}>পাসওয়ার্ড</Text>
         <View style={styles.passwordRow}>
@@ -237,7 +258,7 @@ export default function RegisterScreen() {
             <Ionicons
               name={showPassword ? 'eye-off' : 'eye'}
               size={22}
-              color={Colors.mediumGreen}
+              color={colors.mediumGreen}
             />
           </TouchableOpacity>
         </View>
@@ -259,7 +280,7 @@ export default function RegisterScreen() {
             <Ionicons
               name={showConfirmPassword ? 'eye-off' : 'eye'}
               size={22}
-              color={Colors.mediumGreen}
+              color={colors.mediumGreen}
             />
           </TouchableOpacity>
         </View>
@@ -272,11 +293,11 @@ export default function RegisterScreen() {
 
         <PrimaryButton title="সাইন আপ" onPress={handleRegister} loading={loading} />
 
-        <View style={authStyles.footer}>
-          <Text style={authStyles.footerText}>আগে থেকেই অ্যাকাউন্ট আছে?</Text>
+        <View style={auth.footer}>
+          <Text style={auth.footerText}>আগে থেকেই অ্যাকাউন্ট আছে?</Text>
           <Link href="/auth/login" asChild>
             <TouchableOpacity>
-              <Text style={authStyles.link}>লগইন</Text>
+              <Text style={auth.link}>লগইন</Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -285,7 +306,7 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   label: {
     fontFamily: Fonts.medium,
     fontSize: 14,
@@ -352,7 +373,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     marginBottom: 8,
-    backgroundColor: '#F5F7F4',
+    backgroundColor: Colors.paleGreen,
   },
   optionRowSelected: {
     backgroundColor: Colors.mediumGreen,
@@ -363,7 +384,7 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
   },
   optionTextSelected: {
-    color: Colors.white,
+    color: Colors.textOnPrimary,
     fontFamily: Fonts.medium,
   },
   hint: {

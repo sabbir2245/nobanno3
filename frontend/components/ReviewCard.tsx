@@ -3,11 +3,14 @@ import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { Review } from '@/services/api';
 import { ImageViewer } from '@/components/ImageViewer';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 
 interface Props { review: Review; }
 
 export function ReviewCard({ review }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [viewImageIndex, setViewImageIndex] = useState<number | null>(null);
 
   const imageSources = (review.images || []).map((img) => img.image || img.image_url).filter(Boolean) as string[];
@@ -29,11 +32,11 @@ export function ReviewCard({ review }: Props) {
           <Text style={styles.name}>{review.customer_username}</Text>
           <View style={styles.starRow}>
             {Array.from({ length: fullStars }).map((_, i) => (
-              <Ionicons key={`f-${i}`} name="star" size={12} color={Colors.starGold} />
+              <Ionicons key={`f-${i}`} name="star" size={12} color={colors.starGold} />
             ))}
-            {hasHalf && <Ionicons name="star-half" size={12} color={Colors.starGold} />}
+            {hasHalf && <Ionicons name="star-half" size={12} color={colors.starGold} />}
             {Array.from({ length: emptyStars }).map((_, i) => (
-              <Ionicons key={`e-${i}`} name="star-outline" size={12} color={Colors.starGold} />
+              <Ionicons key={`e-${i}`} name="star-outline" size={12} color={colors.starGold} />
             ))}
           </View>
         </View>
@@ -62,11 +65,11 @@ export function ReviewCard({ review }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: Colors.white, borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.border },
   header: { flexDirection: 'row', alignItems: 'center' },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mediumGreen, alignItems: 'center', justifyContent: 'center', marginRight: Spacing.sm },
-  avatarText: { fontFamily: Fonts.bold, fontSize: 14, color: Colors.white },
+  avatarText: { fontFamily: Fonts.bold, fontSize: 14, color: Colors.textOnPrimary },
   headerInfo: { flex: 1 },
   name: { fontFamily: Fonts.semiBold, fontSize: 13, color: Colors.textDark },
   starRow: { flexDirection: 'row', gap: 1, marginTop: 2 },

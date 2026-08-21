@@ -13,10 +13,13 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, Post } from '@/services/api';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 export default function FarmerDashboardScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { token, user, refreshProfile } = useAuth();
   const [myPosts, setMyPosts] = useState<Post[]>([]);
@@ -79,13 +82,13 @@ export default function FarmerDashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.brand}>Nobanno</Text>
-          <Text style={styles.hub}>Farmer Hub</Text>
+          <Text style={styles.hub}>FarmerHub</Text>
         </View>
         <TouchableOpacity
           style={styles.avatar}
           onPress={() => router.push('/(farmer)/account')}
         >
-          <Ionicons name="person" size={20} color={Colors.white} />
+          <Ionicons name="person" size={20} color={colors.white} />
         </TouchableOpacity>
       </View>
 
@@ -120,7 +123,7 @@ export default function FarmerDashboardScreen() {
           style={styles.createBtn}
           onPress={() => router.push('/(farmer)/post')}
         >
-          <Ionicons name="add-circle-outline" size={20} color={Colors.white} />
+          <Ionicons name="add-circle-outline" size={20} color={colors.white} />
           <Text style={styles.createBtnText}>Create New Post</Text>
         </TouchableOpacity>
 
@@ -132,7 +135,7 @@ export default function FarmerDashboardScreen() {
                 <Image source={{ uri: post.image }} style={styles.postThumb} />
               ) : (
                 <View style={styles.postThumbPlaceholder}>
-                  <Ionicons name="image-outline" size={24} color={Colors.textMuted} />
+                  <Ionicons name="image-outline" size={24} color={colors.textMuted} />
                 </View>
               )}
               <View style={styles.postDetails}>
@@ -148,7 +151,7 @@ export default function FarmerDashboardScreen() {
                 style={styles.editBtn}
                 onPress={() => confirmEdit(post.id)}
               >
-                <Ionicons name="create-outline" size={18} color={Colors.darkGreen} />
+                <Ionicons name="create-outline" size={18} color={colors.darkGreen} />
                 <Text style={styles.editBtnText}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -159,7 +162,7 @@ export default function FarmerDashboardScreen() {
                 <Ionicons
                   name={deletingId === post.id ? 'hourglass' : 'trash-outline'}
                   size={18}
-                  color={Colors.red}
+                  color={colors.red}
                 />
                 <Text style={styles.deleteBtnText}>
                   {deletingId === post.id ? 'Deleting...' : 'Delete'}
@@ -176,7 +179,7 @@ export default function FarmerDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.paleGreen,
@@ -193,12 +196,14 @@ const styles = StyleSheet.create({
   brand: {
     fontFamily: Fonts.regular,
     fontSize: 14,
-    color: Colors.lightGreen,
+    color: Colors.textOnPrimary,
+    opacity: 0.8,
   },
   hub: {
     fontFamily: Fonts.bold,
-    fontSize: 22,
-    color: Colors.white,
+    fontSize: 26,
+    color: Colors.textOnPrimary,
+    lineHeight: 30,
   },
   avatar: {
     width: 36,
@@ -226,7 +231,7 @@ const styles = StyleSheet.create({
   profileInitial: {
     fontFamily: Fonts.bold,
     fontSize: 22,
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
   avatarImage: {
     width: 56,
@@ -270,7 +275,7 @@ const styles = StyleSheet.create({
   createBtnText: {
     fontFamily: Fonts.semiBold,
     fontSize: 15,
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
   sectionTitle: {
     fontFamily: Fonts.semiBold,

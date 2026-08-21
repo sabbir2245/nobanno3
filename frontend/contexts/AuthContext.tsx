@@ -26,14 +26,15 @@ interface AuthContextValue {
   login: (emailOrPhone: string, password: string) => Promise<User>;
   register: (data: {
     username: string;
-    email: string;        // CHANGE 2: Marked as strictly required
-    phone_number: string; // CHANGE 3: Marked as strictly required
+    email: string;
+    phone_number: string;
     password: string;
     role: UserRole;
     name?: string;
     address?: string;
     location: number;
-  }) => Promise<void>;
+    bkash_number?: string;
+  }) => Promise<User>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -118,20 +119,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name?: string;
       address?: string;
       location: number;
+      bkash_number?: string;
     }) => {
-      await api.register({
+      const result = await api.register({
         ...data,
       });
+      await persistSession(result.token, result.user);
+      return result.user;
     },
-    [],
+    [persistSession],
   );
 
   const logout = useCallback(async () => {
+    if (token) {
+      try {
+        await api.logout(token);
+      } catch (err) {
+        console.error('Failed to revoke token during logout:', err);
+      }
+    }
     setToken(null);
     setUser(null);
     setRoleState(null);
-    await AsyncStorage.multiRemove([KEYS.token, KEYS.user, KEYS.role]);
-  }, []);
+    setLocationState(null);
+    await AsyncStorage.multiRemove([KEYS.token, KEYS.user, KEYS.role, KEYS.location]);
+  }, [token]);
 
   const refreshProfile = useCallback(async () => {
     if (!token) return;

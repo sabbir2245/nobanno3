@@ -13,12 +13,14 @@ import { useRouter } from 'expo-router';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { api, ApiError } from '@/services/api';
-import { Colors, Fonts, Spacing, Radius } from '@/constants/theme';
+import { Colors, Fonts, Spacing, Radius, ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/contexts/ThemeContext';
 
 type Method = 'email' | 'sms';
 type Step = 'send-otp' | 'reset-password';
 
 export default function ForgotPasswordScreen() {
+  const styles = useThemedStyles(createStyles);
   const router = useRouter();
   const [step, setStep] = useState<Step>('send-otp');
   const [method, setMethod] = useState<Method>('email');
@@ -189,7 +191,7 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: Colors.paleGreen,
@@ -239,7 +241,7 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
   },
   methodTextActive: {
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
   back: {
     marginTop: Spacing.lg,

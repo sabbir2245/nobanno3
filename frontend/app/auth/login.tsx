@@ -14,16 +14,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ApiError } from '@/services/api';
-import { Colors, Fonts, Spacing } from '@/constants/theme';
-import { authStyles } from '@/styles/global';
+import { Colors, Fonts, Spacing, ThemeColors } from '@/constants/theme';
+import { useAuthStyles } from '@/styles/global';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import '../../localization/i18n'; // Ensure the config is loaded
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function LoginScreen(): React.JSX.Element {
   const router = useRouter();
   const { login } = useAuth();
   const { t, i18n } = useTranslation();
+  const { colors } = useTheme();
+  const auth = useAuthStyles();
+  const styles = useThemedStyles(createStyles);
 
   // Functional configurations
   const [identityInput, setIdentityInput] = useState<string>('');
@@ -71,13 +76,16 @@ export default function LoginScreen(): React.JSX.Element {
   };
 
   return (
-    <KeyboardAvoidingView style={authStyles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={authStyles.container} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView style={auth.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={auth.container} keyboardShouldPersistTaps="handled">
         <View style={styles.topRow}>
-          <Text style={authStyles.brand}>Nobanno</Text>
+          <Text style={auth.brand}>Nobanno</Text>
+          <View style={{ marginTop: -Spacing.lg }}>
+            <ThemeToggle />
+          </View>
         </View>
 
-        <Text style={authStyles.title}>{t('Welcome back')}</Text>
+        <Text style={auth.title}>{t('Welcome back')}</Text>
         <Text style={styles.subtitle}>{t('log in')}</Text>
 
         <InputField
@@ -101,7 +109,7 @@ export default function LoginScreen(): React.JSX.Element {
             />
           </View>
           <TouchableOpacity style={styles.eyeIconContainer} onPress={() => setShowPass(!showPass)}>
-            <Ionicons name={showPass ? 'eye-off' : 'eye'} size={22} color={Colors.mediumGreen} />
+            <Ionicons name={showPass ? 'eye-off' : 'eye'} size={22} color={colors.mediumGreen} />
           </TouchableOpacity>
         </View>
 
@@ -113,11 +121,11 @@ export default function LoginScreen(): React.JSX.Element {
 
         <PrimaryButton title={t("Login")} onPress={handleLogin} loading={loading} />
 
-        <View style={authStyles.footer}>
-          <Text style={authStyles.footerText}>{t("Don't have an account?")}</Text>
+        <View style={auth.footer}>
+          <Text style={auth.footerText}>{t("Don't have an account?")}</Text>
           <Link href="/auth/register" asChild>
             <TouchableOpacity>
-              <Text style={authStyles.link}>{t('Sign up')}</Text>
+              <Text style={auth.link}>{t('Sign up')}</Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -126,7 +134,7 @@ export default function LoginScreen(): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

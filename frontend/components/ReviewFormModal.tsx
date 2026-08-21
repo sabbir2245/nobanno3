@@ -16,7 +16,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 
 interface Props {
   visible: boolean;
@@ -28,6 +29,8 @@ interface Props {
 
 export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess }: Props) {
   const { token } = useAuth();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -104,7 +107,7 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
                   <Ionicons
                     name={star <= rating ? 'star' : 'star-outline'}
                     size={36}
-                    color={star <= rating ? Colors.starGold : Colors.border}
+                    color={star <= rating ? colors.starGold : colors.border}
                   />
                 </TouchableOpacity>
               ))}
@@ -118,7 +121,7 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
             <TextInput
               style={styles.input}
               placeholder="Write your review (optional)"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={comment}
               onChangeText={setComment}
               multiline
@@ -127,7 +130,7 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
             />
 
             <TouchableOpacity style={styles.photoBtn} onPress={pickImages}>
-              <Ionicons name="camera-outline" size={18} color={Colors.darkGreen} />
+              <Ionicons name="camera-outline" size={18} color={colors.darkGreen} />
               <Text style={styles.photoBtnText}>
                 {imageUris.length > 0 ? `${imageUris.length}/3 photos` : 'Add Photos'}
               </Text>
@@ -139,7 +142,7 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
                   <View key={i} style={styles.photoPreviewBox}>
                     <Image source={{ uri }} style={styles.photoPreview} />
                     <TouchableOpacity style={styles.photoRemove} onPress={() => removeImage(i)}>
-                      <Ionicons name="close-circle" size={18} color={Colors.darkGreen} />
+                      <Ionicons name="close-circle" size={18} color={colors.darkGreen} />
                     </TouchableOpacity>
                   </View>
                 ))}
@@ -167,7 +170,7 @@ export function ReviewFormModal({ visible, postId, postTitle, onClose, onSuccess
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',

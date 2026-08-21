@@ -1,16 +1,18 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Fonts } from '@/constants/theme';
+import { Fonts } from '@/constants/theme';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export default function CustomerLayout() {
+  const { colors } = useTheme();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.darkGreen,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarStyle: { backgroundColor: Colors.white, borderTopColor: Colors.border, height: 60, paddingBottom: 8 },
+        tabBarActiveTintColor: colors.darkGreen,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: { backgroundColor: colors.white, borderTopColor: colors.border, height: 60, paddingBottom: 8 },
         tabBarLabelStyle: { fontFamily: Fonts.medium, fontSize: 11 },
       }}
     >

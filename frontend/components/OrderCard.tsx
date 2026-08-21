@@ -2,7 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Order } from '@/services/api';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 import { PrimaryButton } from './PrimaryButton';
 
 interface Props {
@@ -13,12 +14,6 @@ interface Props {
   actionLoading?: boolean;
 }
 
-const headerStyles = {
-  pending: { bg: Colors.paleYellow, text: Colors.textDark },
-  completed: { bg: Colors.darkGreen, text: Colors.white },
-  cancelled: { bg: '#f0d0d0', text: Colors.textDark },
-};
-
 export function OrderCard({
   order,
   variant,
@@ -26,9 +21,15 @@ export function OrderCard({
   actionLabel,
   actionLoading,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const headerStyles = {
+    pending: { bg: colors.paleYellow, text: colors.textDark },
+    completed: { bg: colors.darkGreen, text: colors.white },
+    cancelled: { bg: '#f0d0d0', text: colors.textDark },
+  };
   const header = headerStyles[variant];
-  const qty = parseFloat(order.quantity_kg);
-  const pricePerKg = qty > 0 ? parseFloat(order.total_paid) / qty : 0;
+  const items = order.items || [];
 
   const headerTitle =
     variant === 'pending'
@@ -44,16 +45,32 @@ export function OrderCard({
       </View>
       <View style={styles.body}>
         <Text style={styles.customer}>গ্রাহক: {order.customer_name || order.customer_username}</Text>
-        <Text style={styles.product}>{order.post_title}</Text>
-        <Text style={styles.detail}>
-          {qty.toFixed(0)} কেজি @ ৳ {pricePerKg.toFixed(0)}/কেজি = ৳{' '}
-          {parseFloat(order.total_paid).toFixed(0)}।{' '}
-          {order.status === 'pending'
-            ? 'অপেক্ষমান'
-            : order.status === 'completed'
-              ? 'সম্পন্ন'
-              : 'বাতিল'}।
-        </Text>
+        {items.length === 1 ? (
+          <>
+            <Text style={styles.product}>{items[0].post_title}</Text>
+            <Text style={styles.detail}>
+              {parseFloat(items[0].quantity_kg).toFixed(0)} {items[0].quantity_type === 'piece' ? 'পিস' : 'কেজি'} @ ৳ {parseFloat(items[0].price_per_kg).toFixed(0)}/কেজি = ৳{' '}
+              {parseFloat(items[0].subtotal).toFixed(0)}।{' '}
+              {order.status === 'pending'
+                ? 'অপেক্ষমান'
+                : order.status === 'completed'
+                  ? 'সম্পন্ন'
+                  : 'বাতিল'}।
+            </Text>
+          </>
+        ) : (
+          items.map((item) => (
+            <View key={item.id} style={styles.itemRow}>
+              <Text style={styles.product}>{item.post_title}</Text>
+              <Text style={styles.detail}>
+                {parseFloat(item.quantity_kg).toFixed(0)} {item.quantity_type === 'piece' ? 'পিস' : 'কেজি'} · ৳{parseFloat(item.subtotal).toFixed(0)}
+              </Text>
+            </View>
+          ))
+        )}
+        {items.length > 1 && (
+          <Text style={styles.total}>মোট: ৳{parseFloat(order.total_paid).toFixed(0)}</Text>
+        )}
         {variant === 'completed' && (
           <Text style={styles.subDetail}>
             গ্রাহক ডেলিভারি নিশ্চিত করেছেন। পেমেন্ট ওয়ালেটে জমা হয়েছে।
@@ -61,7 +78,7 @@ export function OrderCard({
         )}
         {(order.post_location || order.post_collection_point_address) && (
           <View style={styles.pickRow}>
-            <Ionicons name="flag-outline" size={14} color={Colors.darkGreen} />
+            <Ionicons name="flag-outline" size={14} color={colors.darkGreen} />
             <Text style={styles.pickText}>
               {order.post_collection_point_address
                 ? `উঠানোর স্থান: ${order.post_collection_point_address}`
@@ -88,7 +105,7 @@ export function OrderCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   card: {
     borderRadius: Radius.md,
     borderWidth: 1,
@@ -126,12 +143,23 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
     lineHeight: 20,
   },
+  total: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 14,
+    color: Colors.textDark,
+    marginTop: Spacing.sm,
+  },
   subDetail: {
     fontFamily: Fonts.regular,
     fontSize: 12,
     color: Colors.textMuted,
     marginTop: Spacing.xs,
     fontStyle: 'italic',
+  },
+  itemRow: {
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   pickRow: {
     flexDirection: 'row',

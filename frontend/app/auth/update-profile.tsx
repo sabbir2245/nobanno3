@@ -21,9 +21,12 @@ import CascadeLocationPicker from '@/components/CascadingLocationPicker';
 import { LocationSelection } from '@/components/CascadingLocationPicker';
 import { InputField } from '@/components/InputField';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 export default function UpdateProfileScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { token, user, refreshProfile } = useAuth();
 
@@ -163,7 +166,7 @@ export default function UpdateProfileScreen() {
   if (initializing) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={Colors.darkGreen} />
+        <ActivityIndicator size="large" color={colors.darkGreen} />
       </View>
     );
   }
@@ -175,7 +178,7 @@ export default function UpdateProfileScreen() {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.white} />
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
         <View style={styles.backBtn} />
@@ -190,7 +193,7 @@ export default function UpdateProfileScreen() {
               <Image source={{ uri: user.profile_picture }} style={styles.picPreview} />
             ) : (
               <View style={styles.picPlaceholder}>
-                <Ionicons name="camera" size={32} color={Colors.mediumGreen} />
+                <Ionicons name="camera" size={32} color={colors.mediumGreen} />
               </View>
             )}
           </TouchableOpacity>
@@ -201,7 +204,7 @@ export default function UpdateProfileScreen() {
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="person-circle-outline" size={22} color={Colors.darkGreen} />
+            <Ionicons name="person-circle-outline" size={22} color={colors.darkGreen} />
             <Text style={styles.cardTitle}>Personal Information</Text>
           </View>
 
@@ -226,35 +229,36 @@ export default function UpdateProfileScreen() {
             keyboardType="phone-pad"
             placeholder="01XXXXXXXXX"
           />
-          <InputField
-            label="Address"
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Your address"
-            multiline
-          />
         </View>
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="location-outline" size={22} color={Colors.darkGreen} />
+            <Ionicons name="location-outline" size={22} color={colors.darkGreen} />
             <Text style={styles.cardTitle}>Your Area</Text>
           </View>
           <Text style={styles.locHint}>
-            Select your division, district, upazila and union.
+            Select your division, district, upazila, union or city corporation area.
           </Text>
           <CascadeLocationPicker
             initialLocation={initialSelection}
             onLocationSelected={(sel) => {
-              const id = sel.union?.id ?? sel.upazila?.id ?? null;
+              const id = sel.ward?.id ?? sel.union?.id ?? sel.upazila?.id ?? null;
               setLocationId(id);
             }}
           />
+          {(locationId || user?.location) && (
+            <InputField
+              label="Lane / House / Road"
+              value={address}
+              onChangeText={setAddress}
+              placeholder="e.g. House 12, Road 5, Sector 7"
+            />
+          )}
         </View>
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="navigate-outline" size={22} color={Colors.darkGreen} />
+            <Ionicons name="navigate-outline" size={22} color={colors.darkGreen} />
             <Text style={styles.cardTitle}>GPS Pin (optional)</Text>
           </View>
           <Text style={styles.locHint}>
@@ -262,7 +266,7 @@ export default function UpdateProfileScreen() {
           </Text>
           <View style={styles.locRow}>
             <View style={styles.locInfo}>
-              <Ionicons name="navigate" size={18} color={Colors.mediumGreen} />
+              <Ionicons name="navigate" size={18} color={colors.mediumGreen} />
               <Text style={styles.locText}>
                 {locLabel || 'Not set — tap the button to detect'}
               </Text>
@@ -295,7 +299,7 @@ export default function UpdateProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: Colors.paleGreen,
@@ -323,7 +327,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: Fonts.semiBold,
     fontSize: 18,
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
   content: {
     padding: Spacing.md,

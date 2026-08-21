@@ -5,10 +5,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/services/api';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import CascadingLocationPicker from '@/components/CascadingLocationPicker';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 export default function SetLocationScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { token, user, refreshProfile } = useAuth();
   const [locationId, setLocationId] = useState<number | null>(
@@ -43,7 +46,7 @@ export default function SetLocationScreen() {
       </View>
 
       <View style={styles.preview}>
-        <Ionicons name="location" size={16} color={Colors.darkGreen} />
+        <Ionicons name="location" size={16} color={colors.darkGreen} />
         <Text style={styles.previewText}>
           {user?.location
             ? [user.location.division, user.location.district, user.location.upazila, user.location.union]
@@ -55,7 +58,7 @@ export default function SetLocationScreen() {
 
       {saving ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.darkGreen} />
+          <ActivityIndicator size="large" color={colors.darkGreen} />
         </View>
       ) : (
         <CascadingLocationPicker
@@ -78,7 +81,7 @@ export default function SetLocationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.paleGreen, padding: Spacing.md },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {

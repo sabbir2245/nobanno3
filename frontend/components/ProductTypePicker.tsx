@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { api, ProductType } from '@/services/api';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 
 interface Props {
   token: string | null;
@@ -20,6 +21,8 @@ interface Props {
 }
 
 export function ProductTypePicker({ token, selectedId, onSelect }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [visible, setVisible] = useState(false);
   const [types, setTypes] = useState<ProductType[]>([]);
   const [search, setSearch] = useState('');
@@ -51,11 +54,11 @@ export function ProductTypePicker({ token, selectedId, onSelect }: Props) {
   return (
     <>
       <TouchableOpacity style={styles.trigger} onPress={() => setVisible(true)}>
-        <Ionicons name="apps" size={20} color={Colors.darkGreen} />
+        <Ionicons name="apps" size={20} color={colors.darkGreen} />
         <Text style={[styles.triggerText, !selected && styles.placeholder]}>
           {selected ? selected.name_bn : 'পণ্যের ধরন নির্বাচন করুন'}
         </Text>
-        <Ionicons name="chevron-down" size={18} color={Colors.textMuted} />
+        <Ionicons name="chevron-down" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
       <Modal visible={visible} animationType="slide" transparent>
@@ -64,21 +67,21 @@ export function ProductTypePicker({ token, selectedId, onSelect }: Props) {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>পণ্যের ধরন</Text>
               <TouchableOpacity onPress={() => setVisible(false)}>
-                <Ionicons name="close" size={24} color={Colors.textDark} />
+                <Ionicons name="close" size={24} color={colors.textDark} />
               </TouchableOpacity>
             </View>
 
             <TextInput
               style={styles.searchInput}
               placeholder="খুঁজুন..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={search}
               onChangeText={setSearch}
               autoFocus
             />
 
             {loading ? (
-              <ActivityIndicator style={{ marginTop: 40 }} color={Colors.darkGreen} />
+              <ActivityIndicator style={{ marginTop: 40 }} color={colors.darkGreen} />
             ) : (
               <FlatList
                 data={filtered}
@@ -98,7 +101,7 @@ export function ProductTypePicker({ token, selectedId, onSelect }: Props) {
                     <Text style={styles.itemText}>{item.name_bn}</Text>
                     <Text style={styles.itemSub}>{item.name_en}</Text>
                     {item.id === selectedId && (
-                      <Ionicons name="checkmark" size={20} color={Colors.darkGreen} />
+                      <Ionicons name="checkmark" size={20} color={colors.darkGreen} />
                     )}
                   </TouchableOpacity>
                 )}
@@ -126,7 +129,7 @@ export function ProductTypePicker({ token, selectedId, onSelect }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',

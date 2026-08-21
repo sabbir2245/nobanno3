@@ -6,7 +6,8 @@ import {
   StyleSheet,
   TextInputProps,
 } from 'react-native';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 interface Props extends TextInputProps {
   label?: string;
@@ -14,6 +15,8 @@ interface Props extends TextInputProps {
 }
 
 export function InputField({ label, variant = 'cream', style, ...props }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.wrap}>
       {label && <Text style={styles.label}>{label}</Text>}
@@ -23,14 +26,14 @@ export function InputField({ label, variant = 'cream', style, ...props }: Props)
           variant === 'white' && styles.inputWhite,
           style,
         ]}
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={colors.textMuted}
         {...props}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   wrap: {
     marginBottom: Spacing.md,
   },

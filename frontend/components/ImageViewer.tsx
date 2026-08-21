@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -26,6 +27,8 @@ interface Props {
 
 export function ImageViewer({ visible, images, initialIndex = 0, onClose }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const scrollRef = useRef<ScrollView>(null);
   const [index, setIndex] = useState(initialIndex);
   const [zoomed, setZoomed] = useState(false);
@@ -78,12 +81,12 @@ export function ImageViewer({ visible, images, initialIndex = 0, onClose }: Prop
           <>
             {index > 0 && (
               <TouchableOpacity style={[styles.arrow, styles.arrowLeft]} onPress={() => goTo(index - 1)}>
-                <Ionicons name="chevron-back" size={22} color={Colors.white} />
+                <Ionicons name="chevron-back" size={22} color={colors.white} />
               </TouchableOpacity>
             )}
             {index < images.length - 1 && (
               <TouchableOpacity style={[styles.arrow, styles.arrowRight]} onPress={() => goTo(index + 1)}>
-                <Ionicons name="chevron-forward" size={22} color={Colors.white} />
+                <Ionicons name="chevron-forward" size={22} color={colors.white} />
               </TouchableOpacity>
             )}
           </>
@@ -96,7 +99,7 @@ export function ImageViewer({ visible, images, initialIndex = 0, onClose }: Prop
             </Text>
           </View>
           <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-            <Ionicons name="close" size={22} color={Colors.white} />
+            <Ionicons name="close" size={22} color={colors.white} />
           </TouchableOpacity>
         </View>
 
@@ -109,7 +112,7 @@ export function ImageViewer({ visible, images, initialIndex = 0, onClose }: Prop
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.96)' },
   image: {
     width: SCREEN_WIDTH * 0.92,
@@ -139,7 +142,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     paddingVertical: 6,
   },
-  counterText: { fontFamily: Fonts.semiBold, fontSize: 14, color: Colors.white },
+  counterText: { fontFamily: Fonts.semiBold, fontSize: 14, color: Colors.textOnPrimary },
   closeBtn: {
     width: 40,
     height: 40,

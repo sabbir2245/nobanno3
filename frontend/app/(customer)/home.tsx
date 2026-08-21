@@ -8,20 +8,24 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, Post, ProductType } from '@/services/api';
 import { ProductCard } from '@/components/ProductCard';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 const SORT_OPTIONS = ['Nearest', 'Price: Low', 'Price: High', 'Stock', 'Rating'];
-const imageTints = [Colors.lightGreen, '#FFE4C4', Colors.paleYellow, Colors.sageGreen];
 
 export default function CustomerHomeScreen() {
   const router = useRouter();
   const { token, user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const imageTints = [colors.lightGreen, '#FFE4C4', colors.paleYellow, colors.sageGreen];
   const [posts, setPosts] = useState<Post[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [search, setSearch] = useState('');
@@ -29,8 +33,7 @@ export default function CustomerHomeScreen() {
   const [sortBy, setSortBy] = useState('Nearest');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [showSearchFilters, setShowSearchFilters] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
 
   useEffect(() => {
     api.getProductTypes(token ?? null).then(setProductTypes).catch(() => {});
@@ -99,111 +102,50 @@ export default function CustomerHomeScreen() {
             style={styles.avatar}
             onPress={() => router.push('/(customer)/account')}
           >
-            <Ionicons name="person" size={20} color={Colors.white} />
+            <Ionicons name="person" size={20} color={colors.white} />
           </TouchableOpacity>
         </View>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={Colors.lightGreen} />
+          <Ionicons name="search" size={18} color={colors.white} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search rice, potato, vegetables..."
-            placeholderTextColor={Colors.lightGreen}
+            placeholderTextColor="rgba(255,255,255,0.6)"
             value={search}
             onChangeText={setSearch}
             onSubmitEditing={loadPosts}
             returnKeyType="search"
           />
-          <TouchableOpacity onPress={() => setShowSearchFilters(!showSearchFilters)}>
-            <Ionicons name="options" size={18} color={Colors.lightGreen} />
-          </TouchableOpacity>
         </View>
       </View>
 
-      {showSearchFilters && (
-        <View style={styles.filterPanel}>
-          <Text style={styles.filterLabel}>Filter by type:</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterTypeRow}
-          >
-            <TouchableOpacity
-              style={[styles.filterChip, selectedTypeId === null && styles.chipActive]}
-              onPress={() => setSelectedTypeId(null)}
-            >
-              <Text style={[styles.filterChipText, selectedTypeId === null && styles.chipTextActive]}>
-                All
-              </Text>
-            </TouchableOpacity>
-            {productTypes.map((pt) => (
+      <View style={styles.sortContainer}>
+        <TouchableOpacity style={styles.sortButton} onPress={() => setSortOpen(true)}>
+          <Ionicons name="options" size={16} color={colors.darkGreen} />
+          <Text style={styles.sortButtonText}>Sort: {sortBy}</Text>
+          <Ionicons name="chevron-down" size={16} color={colors.darkGreen} />
+        </TouchableOpacity>
+      </View>
+
+      <Modal visible={sortOpen} transparent animationType="fade" onRequestClose={() => setSortOpen(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSortOpen(false)}>
+          <View style={styles.sortSheet}>
+            <Text style={styles.sortSheetTitle}>Sort listings</Text>
+            {SORT_OPTIONS.map((opt) => (
               <TouchableOpacity
-                key={pt.id}
-                style={[styles.filterChip, selectedTypeId === pt.id && styles.chipActive]}
-                onPress={() => setSelectedTypeId(pt.id)}
+                key={opt}
+                style={[styles.sortSheetItem, sortBy === opt && styles.sortSheetItemActive]}
+                onPress={() => {
+                  setSortBy(opt);
+                  setSortOpen(false);
+                }}
               >
-                <Text style={[styles.filterChipText, selectedTypeId === pt.id && styles.chipTextActive]}>
-                  {pt.name_bn || pt.name_en}
-                </Text>
+                <Text style={[styles.sortSheetText, sortBy === opt && styles.sortSheetTextActive]}>{opt}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
-        </View>
-      )}
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categories}
-        contentContainerStyle={styles.categoriesContent}
-      >
-        <TouchableOpacity
-          style={[styles.chip, selectedTypeId === null && styles.chipActive]}
-          onPress={() => setSelectedTypeId(null)}
-        >
-          <Text style={[styles.chipText, selectedTypeId === null && styles.chipTextActive]}>
-            সব
-          </Text>
+          </View>
         </TouchableOpacity>
-        {productTypes.map((pt) => (
-          <TouchableOpacity
-            key={pt.id}
-            style={[styles.chip, selectedTypeId === pt.id && styles.chipActive]}
-            onPress={() => setSelectedTypeId(pt.id)}
-          >
-            <Text style={[styles.chipText, selectedTypeId === pt.id && styles.chipTextActive]}>
-              {pt.name_bn || pt.name_en}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity
-          style={styles.filterBtn}
-          onPress={() => setShowFilters(!showFilters)}
-        >
-          <Ionicons name="options" size={16} color={Colors.darkGreen} />
-          <Text style={styles.filterText}>Sort</Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {showFilters && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.sortRow}
-          contentContainerStyle={styles.categoriesContent}
-        >
-          {SORT_OPTIONS.map((opt) => (
-            <TouchableOpacity
-              key={opt}
-              style={[styles.sortChip, sortBy === opt && styles.chipActive]}
-              onPress={() => setSortBy(opt)}
-            >
-              <Text style={[styles.chipText, sortBy === opt && styles.chipTextActive]}>
-                {opt}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
+      </Modal>
 
       <ScrollView
         style={styles.list}
@@ -212,7 +154,7 @@ export default function CustomerHomeScreen() {
       >
         <Text style={styles.count}>{sorted.length} listings near you</Text>
         {loading ? (
-          <ActivityIndicator color={Colors.darkGreen} style={{ marginTop: 40 }} />
+          <ActivityIndicator color={colors.darkGreen} style={{ marginTop: 40 }} />
         ) : sorted.length === 0 ? (
           <Text style={styles.empty}>No listings found. Try a different search.</Text>
         ) : (
@@ -230,30 +172,51 @@ export default function CustomerHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.paleGreen },
   header: { backgroundColor: Colors.headerGreen, paddingTop: 48, paddingBottom: Spacing.md, paddingHorizontal: Spacing.md },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
-  delivering: { fontFamily: Fonts.regular, fontSize: 12, color: Colors.lightGreen },
-  location: { fontFamily: Fonts.bold, fontSize: 18, color: Colors.white },
+  delivering: { fontFamily: Fonts.regular, fontSize: 12, color: 'rgba(255,255,255,0.7)' },
+  location: { fontFamily: Fonts.bold, fontSize: 18, color: Colors.textOnPrimary },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.mediumGreen, alignItems: 'center', justifyContent: 'center' },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: Radius.pill, paddingHorizontal: Spacing.md, gap: Spacing.sm },
-  searchInput: { flex: 1, fontFamily: Fonts.regular, fontSize: 14, color: Colors.white, paddingVertical: Spacing.sm },
-  filterPanel: { backgroundColor: Colors.white, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  filterLabel: { fontFamily: Fonts.medium, fontSize: 12, color: Colors.textMuted, marginBottom: Spacing.xs },
-  filterTypeRow: { gap: Spacing.sm, alignItems: 'center' },
-  filterChip: { backgroundColor: Colors.lightGreen, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
-  filterChipText: { fontFamily: Fonts.medium, fontSize: 13, color: Colors.darkGreen },
-  categories: { maxHeight: 52, backgroundColor: Colors.paleGreen },
-  categoriesContent: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm, alignItems: 'center' },
-  chip: { backgroundColor: Colors.lightGreen, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
-  chipActive: { backgroundColor: Colors.darkGreen },
-  chipText: { fontFamily: Fonts.medium, fontSize: 13, color: Colors.darkGreen },
-  chipTextActive: { color: Colors.white },
-  filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.sm },
-  filterText: { fontFamily: Fonts.medium, fontSize: 13, color: Colors.darkGreen },
-  sortRow: { maxHeight: 44 },
-  sortChip: { backgroundColor: Colors.white, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 6, borderWidth: 1, borderColor: Colors.border },
+  searchInput: { flex: 1, fontFamily: Fonts.regular, fontSize: 14, color: Colors.textOnPrimary, paddingVertical: Spacing.sm },
+  sortContainer: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.cardShadow,
+    shadowOpacity: 1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  sortButtonText: { flex: 1, fontFamily: Fonts.medium, fontSize: 13, color: Colors.textDark },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.28)', justifyContent: 'flex-end' },
+  sortSheet: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    padding: Spacing.md,
+    paddingBottom: Spacing.xl,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 10,
+  },
+  sortSheetTitle: { fontFamily: Fonts.semiBold, fontSize: 15, color: Colors.textDark, marginBottom: Spacing.sm },
+  sortSheetItem: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.sm, borderRadius: Radius.md },
+  sortSheetItemActive: { backgroundColor: Colors.paleGreen },
+  sortSheetText: { fontFamily: Fonts.medium, fontSize: 13, color: Colors.textDark },
+  sortSheetTextActive: { color: Colors.darkGreen },
   list: { flex: 1 },
   listContent: { padding: Spacing.md, paddingBottom: Spacing.xl },
   count: { fontFamily: Fonts.regular, fontSize: 14, color: Colors.textMuted, marginBottom: Spacing.md },

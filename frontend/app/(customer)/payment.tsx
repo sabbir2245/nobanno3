@@ -6,20 +6,28 @@ import {
   ScrollView,
   Alert,
   Linking,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { api, ApiError } from '@/services/api';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
+
+const BKASH_NUMBER = '01570237742';
 
 export default function PaymentScreen() {
   const router = useRouter();
   const { address } = useLocalSearchParams<{ address: string }>();
   const { token, refreshProfile } = useAuth();
   const { items, clear } = useCart();
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const [loading, setLoading] = useState(false);
   const [bkashLoading, setBkashLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
@@ -29,6 +37,38 @@ export default function PaymentScreen() {
     payment_id_bkash: string;
   } | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const copyBkashNumber = async () => {
+    await Clipboard.setStringAsync(BKASH_NUMBER);
+    Alert.alert('Copied', 'bKash number copied to clipboard.');
+  };
+
+  const placeManualOrders = async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const bulkItems = items.map((item) => ({
+        post: item.post.id,
+        quantity_kg: item.quantityKg.toFixed(2),
+      }));
+      await api.createBulkOrders(token, bulkItems, address || 'Dhaka');
+      clear();
+      await refreshProfile();
+      Alert.alert(
+        'Order placed',
+        'Your order has been placed. Go to Orders to enter your bKash number and TrxID for admin verification.',
+        [
+          { text: 'View Orders', onPress: () => router.replace('/(customer)/orders') },
+          { text: 'OK', style: 'cancel' },
+        ],
+      );
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Order failed';
+      Alert.alert('Order failed', msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const total = items.reduce(
     (sum, item) => sum + item.quantityKg * parseFloat(item.post.price_per_kg),
@@ -193,6 +233,7 @@ export default function PaymentScreen() {
         </Text>
         {items.map((item) => {
           const lineTotal = item.quantityKg * parseFloat(item.post.price_per_kg);
+          const isPiece = item.post.quantity_type === 'piece';
           return (
             <View key={item.post.id} style={styles.card}>
               <View style={styles.cardRow}>
@@ -202,7 +243,7 @@ export default function PaymentScreen() {
                     {item.post.farmer_name || item.post.farmer_username}
                   </Text>
                   <Text style={styles.cardDetail}>
-                    {item.quantityKg} kg × ৳{parseFloat(item.post.price_per_kg).toFixed(0)}/kg
+                    {item.quantityKg} {isPiece ? 'pieces' : 'kg'} × ৳{parseFloat(item.post.price_per_kg).toFixed(0)}/{isPiece ? 'piece' : 'kg'}
                   </Text>
                 </View>
                 <Text style={styles.cardTotal}>৳{lineTotal.toFixed(0)}</Text>
@@ -217,8 +258,40 @@ export default function PaymentScreen() {
         </View>
 
         <View style={styles.paymentOptions}>
-          <Text style={styles.paymentOptionsTitle}>Payment via bKash</Text>
+          <Text style={styles.paymentOptionsTitle}>Choose payment method</Text>
 
+          {/* ── Manual bKash (Send Money) ──────────────────────────────────── */}
+          <View style={styles.bkashInfoBox}>
+            {/* TODO: Replace placeholder with actual QR code image */}
+            <View style={styles.qrPlaceholder}>
+              <Ionicons name="qr-code" size={80} color={colors.textMuted} />
+              <Text style={styles.qrPlaceholderText}>QR Code</Text>
+            </View>
+
+            <Text style={styles.bkashNumberLabel}>Send money to bKash:</Text>
+            <View style={styles.bkashNumberContainer}>
+              <Text style={styles.bkashNumberText}>{BKASH_NUMBER}</Text>
+              <TouchableOpacity onPress={copyBkashNumber} style={styles.copyBtn}>
+                <Ionicons name="copy-outline" size={18} color={colors.darkGreen} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.bkashHint}>
+              Scan the QR or send the amount to the number above, then note the TrxID to complete your order.
+            </Text>
+          </View>
+
+          <PrimaryButton
+            title="Next Step — Enter TrxID"
+            onPress={placeManualOrders}
+            loading={loading}
+            variant="secondary"
+            style={styles.nextBtn}
+          />
+          <Text style={styles.nextHint}>
+            Places your order, then takes you to Orders where you enter your bKash number and TrxID.
+          </Text>
+
+          {/* ── bKash merchant checkout (hidden for now) ────────────────────
           <PrimaryButton
             title="Pay with bKash"
             onPress={payViaBkash}
@@ -226,6 +299,7 @@ export default function PaymentScreen() {
             variant="sage"
             style={styles.payBtn}
           />
+          ────────────────────────────────────────────────────────────────── */}
 
           <PrimaryButton
             title="Demo Pay (auto-accept)"
@@ -235,6 +309,11 @@ export default function PaymentScreen() {
             style={styles.payBtn}
           />
 
+          <Text style={styles.paymentNote}>
+            UddoktaPay sandbox flow is not wired to the live backend yet, so it stays hidden until the backend exposes a checkout endpoint.
+          </Text>
+
+          {/* ── bKash merchant status polling (hidden for now) ─────────────
           {paymentResult && (
             <>
               <Text style={styles.paymentPendingText}>
@@ -259,13 +338,14 @@ export default function PaymentScreen() {
               />
             </>
           )}
+          ────────────────────────────────────────────────────────────────── */}
         </View>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.paleGreen },
   content: { padding: Spacing.md, paddingBottom: Spacing.xl },
   empty: { alignItems: 'center', paddingTop: 60 },
@@ -316,7 +396,83 @@ const styles = StyleSheet.create({
     color: Colors.textDark,
     marginBottom: Spacing.md,
   },
+  bkashInfoBox: {
+    backgroundColor: Colors.white,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  qrPlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.paleGreen,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+  },
+  qrPlaceholderText: {
+    fontFamily: Fonts.regular,
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  bkashNumberLabel: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginBottom: 4,
+  },
+  bkashNumberContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.paleGreen,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  bkashNumberText: {
+    fontFamily: Fonts.bold,
+    fontSize: 18,
+    color: Colors.darkGreen,
+    letterSpacing: 1,
+  },
+  copyBtn: {
+    marginLeft: Spacing.sm,
+    padding: 4,
+  },
+  bkashHint: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: Spacing.sm,
+  },
+  nextBtn: { marginBottom: Spacing.sm },
+  nextHint: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: Spacing.sm,
+  },
   payBtn: { marginBottom: Spacing.md },
+  paymentNote: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: Colors.textMuted,
+    lineHeight: 18,
+    marginTop: -4,
+    marginBottom: Spacing.sm,
+  },
   paymentPendingText: {
     fontFamily: Fonts.regular,
     fontSize: 13,

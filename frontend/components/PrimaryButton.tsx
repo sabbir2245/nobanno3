@@ -6,7 +6,8 @@ import {
   ActivityIndicator,
   ViewStyle,
 } from 'react-native';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 interface Props {
   title: string;
@@ -25,6 +26,8 @@ export function PrimaryButton({
   variant = 'primary',
   style,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const isSecondary = variant === 'secondary';
   const isSage = variant === 'sage';
 
@@ -41,7 +44,7 @@ export function PrimaryButton({
       activeOpacity={0.85}
     >
       {loading ? (
-        <ActivityIndicator color={isSecondary ? Colors.textDark : Colors.white} />
+        <ActivityIndicator color={isSecondary ? colors.textDark : colors.white} />
       ) : (
         <Text
           style={[
@@ -56,7 +59,7 @@ export function PrimaryButton({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   button: {
     backgroundColor: Colors.darkGreen,
     borderRadius: Radius.pill,
@@ -76,7 +79,7 @@ const styles = StyleSheet.create({
   text: {
     fontFamily: Fonts.semiBold,
     fontSize: 16,
-    color: Colors.white,
+    color: Colors.textOnPrimary,
   },
   textDark: {
     color: Colors.textDark,

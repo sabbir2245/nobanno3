@@ -11,9 +11,12 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
+import { Colors, Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
 
 export default function LocationScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const router = useRouter();
   const { setLocation, token, user, location, isLoading } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -85,20 +88,20 @@ export default function LocationScreen() {
     <View style={styles.container}>
       <View style={styles.hero}>
         <View style={styles.iconCircle}>
-          <Ionicons name="leaf" size={48} color={Colors.white} />
+          <Ionicons name="leaf" size={48} color={colors.white} />
         </View>
         <Text style={styles.brand}>Nobanno</Text>
         <Text style={styles.tagline}>Fresh crops from local farmers</Text>
       </View>
 
       <View style={styles.card}>
-        <Ionicons name="location" size={32} color={Colors.darkGreen} />
+        <Ionicons name="location" size={32} color={colors.darkGreen} />
         <Text style={styles.title}>Enable Location</Text>
         <Text style={styles.subtitle}>
           We need your location to show crop listings near you and sort by distance.
         </Text>
         {loading ? (
-          <ActivityIndicator color={Colors.darkGreen} style={{ marginTop: Spacing.lg }} />
+          <ActivityIndicator color={colors.darkGreen} style={{ marginTop: Spacing.lg }} />
         ) : (
           <PrimaryButton
             title="Allow Location Access"
@@ -106,12 +109,18 @@ export default function LocationScreen() {
             style={styles.btn}
           />
         )}
+        <PrimaryButton
+          title="Skip"
+          onPress={() => router.replace('/auth/login')}
+          variant="secondary"
+          style={styles.skipBtn}
+        />
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.paleGreen,
@@ -166,6 +175,10 @@ const styles = StyleSheet.create({
   },
   btn: {
     marginTop: Spacing.lg,
+    width: '100%',
+  },
+  skipBtn: {
+    marginTop: Spacing.sm,
     width: '100%',
   },
 });

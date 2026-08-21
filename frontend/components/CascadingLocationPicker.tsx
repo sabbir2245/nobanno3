@@ -7,9 +7,11 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { api, BangladeshLocation } from '@/services/api';
-import { Colors, Fonts, Spacing } from '@/constants/theme';
+import { useTheme, useThemedStyles } from '@/contexts/ThemeContext';
+import { Fonts, Radius, Spacing, ThemeColors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export interface LocationSelection {
@@ -26,6 +28,8 @@ interface Props {
 }
 
 export default function CascadingLocationPicker({ onLocationSelected, initialLocation }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [divisions, setDivisions] = useState<BangladeshLocation[]>([]);
   const [districts, setDistricts] = useState<BangladeshLocation[]>([]);
   const [upazilas, setUpazilas] = useState<BangladeshLocation[]>([]);
@@ -39,6 +43,8 @@ export default function CascadingLocationPicker({ onLocationSelected, initialLoc
   );
   const [activePicker, setActivePicker] = useState<string | null>(null);
   const [loadingLocations, setLoadingLocations] = useState(false);
+  const [isCityCorpDistrict, setIsCityCorpDistrict] = useState(false);
+  const [search, setSearch] = useState('');
 
   // Load divisions on mount
   useEffect(() => {
@@ -84,6 +90,7 @@ export default function CascadingLocationPicker({ onLocationSelected, initialLoc
         newSelection.upazila = null;
         newSelection.union = null;
         newSelection.ward = null;
+        setIsCityCorpDistrict(false);
         setDistricts([]); setUpazilas([]); setUnions([]); setWards([]);
         loadChildren(item.id, 'district');
         break;
@@ -93,7 +100,15 @@ export default function CascadingLocationPicker({ onLocationSelected, initialLoc
         newSelection.union = null;
         newSelection.ward = null;
         setUpazilas([]); setUnions([]); setWards([]);
-        loadChildren(item.id, 'upazila');
+        // Dhaka (and other city-corp districts) have ward-level city
+        // corporation areas directly under the district instead of upazilas.
+        const isDhaka = /dhaka/i.test(item.name_en) || item.name_bn === 'ঢাকা';
+        setIsCityCorpDistrict(isDhaka);
+        if (isDhaka) {
+          loadChildren(item.id, 'ward');
+        } else {
+          loadChildren(item.id, 'upazila');
+        }
         break;
       case 'upazila':
         newSelection.upazila = { id: item.id, name_en: item.name_en, name_bn: item.name_bn };
@@ -120,12 +135,23 @@ export default function CascadingLocationPicker({ onLocationSelected, initialLoc
 
   const renderPicker = (level: string, label: string, data: BangladeshLocation[]) => {
     const selectedItem = selection[level as keyof LocationSelection];
+    const q = search.trim().toLowerCase();
+    const filteredData = q
+      ? data.filter(
+          (item) =>
+            item.name_en.toLowerCase().includes(q) ||
+            item.name_bn.toLowerCase().includes(q),
+        )
+      : data;
     return (
       <View style={styles.pickerContainer}>
         <Text style={styles.pickerLabel}>{label}</Text>
         <TouchableOpacity
           style={styles.pickerButton}
-          onPress={() => setActivePicker(activePicker === level ? null : level)}
+          onPress={() => {
+            setSearch('');
+            setActivePicker(activePicker === level ? null : level);
+          }}
         >
           <Text style={[styles.pickerText, !selectedItem && styles.placeholderText]}>
             {selectedItem ? selectedItem.name_bn || selectedItem.name_en : `Select ${label}`}
@@ -133,7 +159,7 @@ export default function CascadingLocationPicker({ onLocationSelected, initialLoc
           <Ionicons
             name={activePicker === level ? 'chevron-up' : 'chevron-down'}
             size={18}
-            color={Colors.textMuted}
+            color={colors.textMuted}
           />
         </TouchableOpacity>
 
@@ -145,13 +171,29 @@ export default function CascadingLocationPicker({ onLocationSelected, initialLoc
           >
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Select {label}</Text>
+              {data.length > 10 && (
+                <View style={styles.searchBox}>
+                  <Ionicons name="search" size={16} color={colors.textMuted} />
+                  <TextInput
+                    style={styles.searchInput}
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder={`Search ${label.toLowerCase()}...`}
+                    placeholderTextColor={colors.textMuted}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                </View>
+              )}
               {loadingLocations ? (
-                <ActivityIndicator color={Colors.darkGreen} style={{ padding: 20 }} />
-              ) : data.length === 0 ? (
-                <Text style={styles.noDataText}>No items available</Text>
+                <ActivityIndicator color={colors.darkGreen} style={{ padding: 20 }} />
+              ) : filteredData.length === 0 ? (
+                <Text style={styles.noDataText}>
+                  {data.length === 0 ? 'No items available' : 'No matches found'}
+                </Text>
               ) : (
-                <ScrollView style={styles.optionsList}>
-                  {data.map((item) => (
+                <ScrollView style={styles.optionsList} keyboardShouldPersistTaps="handled">
+                  {filteredData.map((item) => (
                     <TouchableOpacity
                       key={item.id}
                       style={[
@@ -167,7 +209,7 @@ export default function CascadingLocationPicker({ onLocationSelected, initialLoc
                         {item.name_bn || item.name_en}
                       </Text>
                       {selectedItem?.id === item.id && (
-                        <Ionicons name="checkmark" size={20} color={Colors.white} />
+                        <Ionicons name="checkmark" size={20} color={colors.white} />
                       )}
                     </TouchableOpacity>
                   ))}
@@ -184,14 +226,15 @@ export default function CascadingLocationPicker({ onLocationSelected, initialLoc
     <View style={styles.container}>
       {renderPicker('division', 'Division', divisions)}
       {selection.division && renderPicker('district', 'District', districts)}
-      {selection.district && renderPicker('upazila', 'Upazila', upazilas)}
-      {selection.upazila && renderPicker('union', 'Union', unions)}
-      {selection.union && renderPicker('ward', 'Ward', wards)}
+      {selection.district && isCityCorpDistrict && renderPicker('ward', 'City Corporation Area', wards)}
+      {selection.district && !isCityCorpDistrict && renderPicker('upazila', 'Upazila', upazilas)}
+      {selection.district && !isCityCorpDistrict && selection.upazila && renderPicker('union', 'Union', unions)}
+      {selection.district && !isCityCorpDistrict && selection.union && renderPicker('ward', 'Ward', wards)}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   container: { width: '100%' },
   pickerContainer: { marginBottom: Spacing.sm },
   pickerLabel: {
@@ -237,6 +280,24 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.paleGreen,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    gap: 6,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 8,
+    fontFamily: Fonts.regular,
+    fontSize: 14,
+    color: Colors.textDark,
+  },
   optionsList: { maxHeight: 400 },
   optionRow: {
     flexDirection: 'row',
@@ -246,7 +307,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     marginBottom: 6,
-    backgroundColor: '#F5F7F4',
+    backgroundColor: Colors.paleGreen,
   },
   optionRowSelected: { backgroundColor: Colors.mediumGreen },
   optionText: {
@@ -254,7 +315,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textDark,
   },
-  optionTextSelected: { color: Colors.white, fontFamily: Fonts.medium },
+  optionTextSelected: { color: Colors.textOnPrimary, fontFamily: Fonts.medium },
   noDataText: {
     fontFamily: Fonts.regular,
     fontSize: 14,
